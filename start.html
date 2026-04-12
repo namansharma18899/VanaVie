@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VanaVie - Choose Your Character</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background: #0a0a12;
+            color: #e0d8c8;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        h1 {
+            font-size: 3rem;
+            letter-spacing: 0.3em;
+            color: #ccaa55;
+            text-shadow: 0 0 20px rgba(204, 170, 85, 0.4);
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            font-size: 0.9rem;
+            color: #887755;
+            letter-spacing: 0.15em;
+            margin-bottom: 2rem;
+        }
+
+        .selector-container {
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+        }
+
+        .character-card {
+            width: 280px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(204, 170, 85, 0.2);
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+            transition: border-color 0.3s, box-shadow 0.3s;
+        }
+
+        .character-card.selected {
+            border-color: #ccaa55;
+            box-shadow: 0 0 30px rgba(204, 170, 85, 0.15);
+        }
+
+        .character-portrait {
+            width: 160px;
+            height: 160px;
+            margin: 0 auto 1rem;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #111;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .character-portrait img {
+            max-width: 100%;
+            max-height: 100%;
+            image-rendering: pixelated;
+        }
+
+        .character-portrait .placeholder {
+            font-size: 3rem;
+            opacity: 0.3;
+        }
+
+        .character-name {
+            font-size: 1.4rem;
+            color: #ccaa55;
+            margin-bottom: 0.5rem;
+        }
+
+        .character-desc {
+            font-size: 0.8rem;
+            color: #887755;
+            line-height: 1.4;
+            min-height: 2.8em;
+        }
+
+        .nav-btn {
+            background: none;
+            border: 1px solid rgba(204, 170, 85, 0.3);
+            color: #ccaa55;
+            font-size: 1.8rem;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .nav-btn:hover {
+            background: rgba(204, 170, 85, 0.1);
+            border-color: #ccaa55;
+        }
+
+        .start-btn {
+            margin-top: 2.5rem;
+            padding: 0.9rem 3rem;
+            font-size: 1.1rem;
+            letter-spacing: 0.15em;
+            background: rgba(204, 170, 85, 0.15);
+            border: 1px solid #ccaa55;
+            color: #ccaa55;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .start-btn:hover {
+            background: rgba(204, 170, 85, 0.3);
+            box-shadow: 0 0 20px rgba(204, 170, 85, 0.2);
+        }
+
+        .start-btn:disabled {
+            opacity: 0.3;
+            cursor: default;
+        }
+
+        .controls-hint {
+            position: fixed;
+            bottom: 20px;
+            color: #554433;
+            font-size: 0.75rem;
+            letter-spacing: 0.1em;
+        }
+    </style>
+</head>
+<body>
+    <h1>VANAVIE</h1>
+    <p class="subtitle">Choose your traveler</p>
+
+    <div class="selector-container">
+        <button class="nav-btn" id="prevBtn">&#9664;</button>
+        <div class="character-card selected" id="characterCard">
+            <div class="character-portrait" id="portrait">
+                <span class="placeholder">?</span>
+            </div>
+            <div class="character-name" id="charName">Knight</div>
+            <div class="character-desc" id="charDesc">A balanced warrior with sword and shield.</div>
+        </div>
+        <button class="nav-btn" id="nextBtn">&#9654;</button>
+    </div>
+
+    <button class="start-btn" id="startBtn">BEGIN JOURNEY</button>
+
+    <div class="controls-hint">
+        WASD to move &middot; SPACE to attack &middot; E to interact
+    </div>
+
+    <script>
+        const characters = [
+            {
+                name: 'Knight',
+                description: 'A balanced warrior with sword and shield.',
+                portrait: 'assets/sprites/knight_portrait.png',
+                spriteSrc: 'assets/sprites/knight_sheet.png',
+                spriteWidth: 64,
+                spriteHeight: 64,
+                drawWidth: 64,
+                drawHeight: 64,
+                speed: 3,
+                jumpForce: -12,
+                maxHealth: 100,
+                damage: 15,
+                hitboxOffsetX: 16,
+                hitboxOffsetY: 8,
+                hitboxWidth: 32,
+                hitboxHeight: 56,
+                animations: {
+                    idle:   { row: 0, frames: 3 },
+                    run:    { row: 1, frames: 5 },
+                    jump:   { row: 2, frames: 3 },
+                    fall:   { row: 3, frames: 2 },
+                    attack: { row: 4, frames: 4 },
+                    hurt:   { row: 5, frames: 2 },
+                    dead:   { row: 6, frames: 5 },
+                },
+            },
+            {
+                name: 'Archer',
+                description: 'Fast and agile. Strikes from a distance.',
+                portrait: 'assets/sprites/archer_portrait.png',
+                spriteSrc: 'assets/sprites/archer_sheet.png',
+                spriteWidth: 64,
+                spriteHeight: 64,
+                drawWidth: 64,
+                drawHeight: 64,
+                speed: 4,
+                jumpForce: -13,
+                maxHealth: 75,
+                damage: 12,
+                hitboxOffsetX: 18,
+                hitboxOffsetY: 10,
+                hitboxWidth: 28,
+                hitboxHeight: 54,
+                animations: {
+                    idle:   { row: 0, frames: 3 },
+                    run:    { row: 1, frames: 5 },
+                    jump:   { row: 2, frames: 3 },
+                    fall:   { row: 3, frames: 2 },
+                    attack: { row: 4, frames: 6 },
+                    hurt:   { row: 5, frames: 2 },
+                    dead:   { row: 6, frames: 5 },
+                },
+            },
+            {
+                name: 'Wizard',
+                description: 'Wields arcane power. Fragile but devastating.',
+                portrait: 'assets/sprites/wizard_portrait.png',
+                spriteSrc: 'assets/sprites/wizard_sheet.png',
+                spriteWidth: 64,
+                spriteHeight: 64,
+                drawWidth: 64,
+                drawHeight: 64,
+                speed: 2.5,
+                jumpForce: -11,
+                maxHealth: 60,
+                damage: 25,
+                hitboxOffsetX: 18,
+                hitboxOffsetY: 10,
+                hitboxWidth: 28,
+                hitboxHeight: 54,
+                animations: {
+                    idle:   { row: 0, frames: 3 },
+                    run:    { row: 1, frames: 5 },
+                    jump:   { row: 2, frames: 3 },
+                    fall:   { row: 3, frames: 2 },
+                    attack: { row: 4, frames: 5 },
+                    hurt:   { row: 5, frames: 2 },
+                    dead:   { row: 6, frames: 5 },
+                },
+            },
+            {
+                name: 'Rogue',
+                description: 'Shadow-born. The fastest blade in the forest.',
+                portrait: 'assets/sprites/rogue_portrait.png',
+                spriteSrc: 'assets/sprites/rogue_sheet.png',
+                spriteWidth: 64,
+                spriteHeight: 64,
+                drawWidth: 64,
+                drawHeight: 64,
+                speed: 5,
+                jumpForce: -14,
+                maxHealth: 65,
+                damage: 18,
+                hitboxOffsetX: 16,
+                hitboxOffsetY: 8,
+                hitboxWidth: 32,
+                hitboxHeight: 56,
+                animations: {
+                    idle:   { row: 0, frames: 3 },
+                    run:    { row: 1, frames: 5 },
+                    jump:   { row: 2, frames: 3 },
+                    fall:   { row: 3, frames: 2 },
+                    attack: { row: 4, frames: 4 },
+                    hurt:   { row: 5, frames: 2 },
+                    dead:   { row: 6, frames: 5 },
+                },
+            },
+        ];
+
+        let currentIndex = 0;
+        const portraitEl = document.getElementById('portrait');
+        const nameEl = document.getElementById('charName');
+        const descEl = document.getElementById('charDesc');
+
+        function render() {
+            const char = characters[currentIndex];
+            nameEl.textContent = char.name;
+            descEl.textContent = char.description;
+
+            const img = new Image();
+            img.src = char.portrait;
+            img.onload = () => {
+                portraitEl.innerHTML = '';
+                portraitEl.appendChild(img);
+            };
+            img.onerror = () => {
+                portraitEl.innerHTML = '<span class="placeholder">?</span>';
+            };
+        }
+
+        document.getElementById('prevBtn').addEventListener('click', () => {
+            currentIndex = (currentIndex - 1 + characters.length) % characters.length;
+            render();
+        });
+
+        document.getElementById('nextBtn').addEventListener('click', () => {
+            currentIndex = (currentIndex + 1) % characters.length;
+            render();
+        });
+
+        document.getElementById('startBtn').addEventListener('click', () => {
+            localStorage.setItem('vanavie_character', JSON.stringify(characters[currentIndex]));
+            window.location.href = 'index.html';
+        });
+
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft' || e.key === 'a') {
+                currentIndex = (currentIndex - 1 + characters.length) % characters.length;
+                render();
+            } else if (e.key === 'ArrowRight' || e.key === 'd') {
+                currentIndex = (currentIndex + 1) % characters.length;
+                render();
+            } else if (e.key === 'Enter') {
+                document.getElementById('startBtn').click();
+            }
+        });
+
+        render();
+    </script>
+</body>
+</html>
