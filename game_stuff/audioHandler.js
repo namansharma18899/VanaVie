@@ -39,7 +39,7 @@ export class AudioManager {
         }
     }
 
-    playMusic(src) {
+    playMusic(src, { startTime = 0 } = {}) {
         if (this.music) {
             this.music.pause();
             this.music.currentTime = 0;
@@ -47,6 +47,15 @@ export class AudioManager {
         this.music = new Audio(src);
         this.music.loop = true;
         this.music.volume = this.musicVolume;
+        this.musicStartTime = startTime;
+        if (startTime > 0) {
+            this.music.currentTime = startTime;
+            this.music.addEventListener('timeupdate', () => {
+                if (this.music.currentTime < startTime) {
+                    this.music.currentTime = startTime;
+                }
+            });
+        }
         if (!this.muted) {
             this.music.play().catch(() => {});
         }

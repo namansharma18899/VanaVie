@@ -48,8 +48,25 @@ export class Player {
         this.hitboxWidth = characterConfig.hitboxWidth || 32;
         this.hitboxHeight = characterConfig.hitboxHeight || 48;
 
-        this.image = new Image();
-        this.image.src = characterConfig.spriteSrc || '';
+        this.image = null;
+        this.activeImage = null;
+        this.animationImages = {};
+
+        if (characterConfig.spriteSrc) {
+            this.image = new Image();
+            this.image.src = characterConfig.spriteSrc;
+            this.activeImage = this.image;
+        }
+
+        const anims = characterConfig.animations || {};
+        for (const [name, anim] of Object.entries(anims)) {
+            if (anim.src) {
+                const img = new Image();
+                img.src = anim.src;
+                this.animationImages[name] = img;
+            }
+        }
+
         this.frameX = 0;
         this.frameY = 0;
         this.maxFrame = 0;
@@ -82,6 +99,20 @@ export class Player {
     setState(stateIndex) {
         this.currentState = this.states[stateIndex];
         this.currentState.enter();
+    }
+
+    setAnimation(animName) {
+        const anim = this.config.animations?.[animName];
+        if (!anim) return;
+        this.frameX = 0;
+        this.maxFrame = anim.frames ?? 3;
+        if (this.animationImages[animName]) {
+            this.activeImage = this.animationImages[animName];
+            this.frameY = 0;
+        } else {
+            this.activeImage = this.image;
+            this.frameY = anim.row ?? 0;
+        }
     }
 
     update(input, deltaTime) {
@@ -123,6 +154,9 @@ export class Player {
     draw(ctx, camera) {
         if (this.invincible && Math.floor(this.invincibleTimer / 100) % 2 === 0) return;
 
+        const img = this.activeImage || this.image;
+        if (!img) return;
+
         const screen = camera.worldToScreen(this.x, this.y);
 
         ctx.save();
@@ -130,7 +164,7 @@ export class Player {
             ctx.translate(screen.x + this.width, screen.y);
             ctx.scale(-1, 1);
             ctx.drawImage(
-                this.image,
+                img,
                 this.frameX * this.spriteWidth, this.frameY * this.spriteHeight,
                 this.spriteWidth, this.spriteHeight,
                 0, 0,
@@ -138,7 +172,7 @@ export class Player {
             );
         } else {
             ctx.drawImage(
-                this.image,
+                img,
                 this.frameX * this.spriteWidth, this.frameY * this.spriteHeight,
                 this.spriteWidth, this.spriteHeight,
                 screen.x, screen.y,
@@ -170,7 +204,7 @@ export class Player {
         const dir = this.facingRight ? 1 : -1;
         const px = this.facingRight ? this.x + this.width : this.x;
         const py = this.y + this.height / 2;
-        this.projectiles.push(new Projectile(px, py, dir));
+        this.projectiles.push(new Projectile(px, py, dir, this.config.projectile));
         this.attackCooldown = 500;
         if (this.game.audio) this.game.audio.play('attack');
     }

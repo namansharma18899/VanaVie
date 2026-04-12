@@ -29,6 +29,7 @@ class Game {
 
         this.player = null;
         this.gameOver = false;
+        this.gameOverReason = '';
         this.paused = false;
 
         this.debug = false;
@@ -43,6 +44,8 @@ class Game {
 
         this.player = new Player(this, characterConfig);
 
+        await this.loadParallax();
+
         try {
             await this.levelManager.loadLevel('level1');
         } catch (e) {
@@ -51,6 +54,7 @@ class Game {
         }
 
         this.camera.follow(this.player);
+        this.audio.playMusic('assets/audio/Relaxing_Bagpipe_Harp_Ocarina_Violin_Celtic_Music_48KBPS.mp4', { startTime: 50 });
 
         window.addEventListener('keydown', (e) => {
             if (e.key === 'p') this.paused = !this.paused;
@@ -60,6 +64,36 @@ class Game {
             }
             if (e.key === 'm') this.audio.toggleMute();
         });
+    }
+
+    async loadParallax() {
+        const base = 'assets/backgrounds/craftpix-net-823949-free-nature-backgrounds-pixel-art';
+        const layerConfigs = [
+            { src: `${base}/nature_2/1.png`, speed: 0 },
+            { src: `${base}/nature_2/2.png`, speed: 0.05 },
+            { src: `${base}/nature_1/3.png`, speed: 0.15 },
+            { src: `${base}/nature_2/3.png`, speed: 0.25 },
+            { src: `${base}/nature_1/5.png`, speed: 0.4 },
+            { src: `${base}/nature_1/6.png`, speed: 0.5 },
+            { src: `${base}/nature_1/8.png`, speed: 0.65 },
+        ];
+
+        const loadImage = (src) => new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.onerror = () => reject(new Error(`Failed to load ${src}`));
+            img.src = src;
+        });
+
+        try {
+            const images = await Promise.all(layerConfigs.map(c => loadImage(c.src)));
+            const layers = images.map((img, i) =>
+                new ParallaxLayer(img, layerConfigs[i].speed, this.height)
+            );
+            this.parallax = new ParallaxBackground(layers);
+        } catch (e) {
+            console.warn('Failed to load parallax backgrounds:', e);
+        }
     }
 
     registerSounds() {
@@ -99,86 +133,97 @@ class Game {
 
     getDefaultCharacter() {
         return {
-            name: 'Knight',
-            spriteSrc: 'assets/sprites/knight_sheet.png',
-            spriteWidth: 64,
-            spriteHeight: 64,
-            drawWidth: 64,
-            drawHeight: 64,
-            speed: 3,
-            jumpForce: -12,
-            maxHealth: 100,
-            damage: 15,
-            hitboxOffsetX: 16,
-            hitboxOffsetY: 8,
-            hitboxWidth: 32,
-            hitboxHeight: 56,
+            name: 'Archer',
+            spriteWidth: 128,
+            spriteHeight: 128,
+            drawWidth: 128,
+            drawHeight: 128,
+            speed: 4,
+            jumpForce: -13,
+            maxHealth: 75,
+            damage: 12,
+            hitboxOffsetX: 36,
+            hitboxOffsetY: 36,
+            hitboxWidth: 48,
+            hitboxHeight: 84,
+            projectile: {
+                src: 'assets/sprites/Archer/Arrow.png',
+                width: 48,
+                height: 16,
+            },
             animations: {
-                idle:   { row: 0, frames: 3 },
-                run:    { row: 1, frames: 5 },
-                jump:   { row: 2, frames: 3 },
-                fall:   { row: 3, frames: 2 },
-                attack: { row: 4, frames: 4 },
-                hurt:   { row: 5, frames: 2 },
-                dead:   { row: 6, frames: 5 },
+                idle:   { src: 'assets/sprites/Archer/Idle.png', frames: 5 },
+                run:    { src: 'assets/sprites/Archer/Run.png', frames: 7 },
+                jump:   { src: 'assets/sprites/Archer/Jump.png', frames: 8 },
+                fall:   { src: 'assets/sprites/Archer/Jump.png', frames: 8 },
+                attack: { src: 'assets/sprites/Archer/Attack_1.png', frames: 3 },
+                hurt:   { src: 'assets/sprites/Archer/Hurt.png', frames: 2 },
+                dead:   { src: 'assets/sprites/Archer/Dead.png', frames: 2 },
             },
         };
     }
 
     createDemoWorld() {
-        const cols = 60;
+        const cols = 120;
         const rows = 17;
         const tileSize = 32;
         const terrainData = new Array(cols * rows).fill(0);
 
-        for (let c = 0; c < cols; c++) {
-            terrainData[(rows - 1) * cols + c] = 1;
-            terrainData[(rows - 2) * cols + c] = 1;
-        }
-
-        for (let r = 0; r < rows; r++) {
-            terrainData[r * cols] = 1;
-            terrainData[r * cols + cols - 1] = 1;
-        }
-
-        for (let c = 15; c < 20; c++) terrainData[(rows - 4) * cols + c] = 1;
-        for (let c = 25; c < 28; c++) terrainData[(rows - 6) * cols + c] = 1;
-        for (let c = 35; c < 42; c++) terrainData[(rows - 4) * cols + c] = 1;
-
-        const demoMap = {
-            width: cols,
-            height: rows,
-            tilewidth: tileSize,
-            tileheight: tileSize,
-            tilesets: [{
-                firstgid: 1,
-                name: 'demo',
-                tilewidth: tileSize,
-                tileheight: tileSize,
-                columns: 1,
-                tilecount: 1,
-                image: null,
-            }],
-            layers: [
-                { name: 'terrain', type: 'tilelayer', data: terrainData, width: cols, height: rows, visible: true },
-                { name: 'collision', type: 'tilelayer', data: terrainData, width: cols, height: rows, visible: false },
-                {
-                    name: 'objects', type: 'objectgroup', objects: [
-                        { name: 'start', type: 'playerStart', x: 64, y: rows * tileSize - 3 * tileSize, width: 32, height: 32 },
-                        {
-                            name: 'welcome', type: 'story', x: 128, y: (rows - 3) * tileSize, width: 64, height: 64,
-                            properties: [
-                                { name: 'text', value: 'Welcome to VanaVie.|The forest awaits...|Use WASD to move, SPACE to attack.' },
-                                { name: 'speaker', value: 'Ancient Stone' },
-                                { name: 'oneShot', value: true },
-                            ],
-                        },
-                    ],
-                },
-            ],
+        const setTile = (r, c, val = 1) => {
+            if (r >= 0 && r < rows && c >= 0 && c < cols)
+                terrainData[r * cols + c] = val;
         };
 
-        const objects = demoMap.layers[2].objects;
+        const fillGround = (startCol, endCol, topRow) => {
+            for (let c = startCol; c < endCol; c++) {
+                setTile(topRow, c, 2);
+                for (let r = topRow + 1; r < rows; r++) setTile(r, c, 1);
+            }
+        };
+
+        fillGround(0, 18, rows - 2);
+        fillGround(21, 42, rows - 2);
+        fillGround(45, 68, rows - 2);
+        fillGround(71, 95, rows - 2);
+        fillGround(98, 120, rows - 2);
+
+        for (let c = 12; c < 16; c++) setTile(rows - 5, c, 3);
+        for (let c = 25; c < 29; c++) setTile(rows - 4, c, 3);
+        for (let c = 33; c < 36; c++) setTile(rows - 6, c, 3);
+        for (let c = 48; c < 53; c++) setTile(rows - 5, c, 3);
+        for (let c = 58; c < 62; c++) setTile(rows - 4, c, 3);
+        for (let c = 59; c < 61; c++) setTile(rows - 7, c, 3);
+        for (let c = 75; c < 79; c++) setTile(rows - 5, c, 3);
+        for (let c = 84; c < 88; c++) setTile(rows - 6, c, 3);
+        for (let c = 100; c < 104; c++) setTile(rows - 4, c, 3);
+        for (let c = 110; c < 114; c++) setTile(rows - 5, c, 3);
+
+        for (let r = 0; r < rows; r++) setTile(r, 0, 1);
+        for (let r = 0; r < rows; r++) setTile(r, cols - 1, 1);
+
+        const groundImage = new Image();
+        groundImage.src = 'assets/backgrounds/layer-5.png';
+
+        const objects = [
+            { name: 'start', type: 'playerStart', x: 64, y: (rows - 3) * tileSize, width: 32, height: 32 },
+            {
+                name: 'welcome', type: 'story', x: 160, y: (rows - 3) * tileSize, width: 64, height: 64,
+                properties: [
+                    { name: 'text', value: 'Welcome to VanaVie.|The forest awaits beyond...|Use WASD to move, SPACE to attack.' },
+                    { name: 'speaker', value: 'Ancient Stone' },
+                    { name: 'oneShot', value: true },
+                ],
+            },
+            {
+                name: 'hint', type: 'story', x: 600, y: (rows - 3) * tileSize, width: 64, height: 64,
+                properties: [
+                    { name: 'text', value: 'Watch your step!|The gaps ahead are deadly.' },
+                    { name: 'speaker', value: 'Worn Signpost' },
+                    { name: 'oneShot', value: true },
+                ],
+            },
+        ];
+
         const extractProps = (obj) => {
             const props = {};
             if (obj.properties) {
@@ -202,7 +247,9 @@ class Game {
             isSolid(wx, wy) {
                 const c = Math.floor(wx / tileSize);
                 const r = Math.floor(wy / tileSize);
-                if (c < 0 || c >= cols || r < 0 || r >= rows) return true;
+                if (c < 0 || c >= cols) return true;
+                if (r < 0) return true;
+                if (r >= rows) return false;
                 return terrainData[r * cols + c] !== 0;
             },
             getObjectsByType(type) {
@@ -221,15 +268,38 @@ class Game {
                 const endCol = Math.min(cols, Math.ceil((camera.x + camera.viewportWidth) / tileSize) + 1);
                 const startRow = Math.max(0, Math.floor(camera.y / tileSize));
                 const endRow = Math.min(rows, Math.ceil((camera.y + camera.viewportHeight) / tileSize) + 1);
+
+                const useImg = groundImage.complete && groundImage.naturalWidth;
+                const srcBrickW = 50;
+                const srcBrickH = 55;
+                const srcTopY = 610;
+
                 for (let r = startRow; r < endRow; r++) {
                     for (let c = startCol; c < endCol; c++) {
                         const gid = layer.data[r * cols + c];
                         if (gid === 0) continue;
-                        const screen = camera.worldToScreen(c * tileSize, r * tileSize);
-                        ctx.fillStyle = '#3a5a3a';
-                        ctx.fillRect(Math.round(screen.x), Math.round(screen.y), tileSize, tileSize);
-                        ctx.strokeStyle = '#2a4a2a';
-                        ctx.strokeRect(Math.round(screen.x), Math.round(screen.y), tileSize, tileSize);
+                        const sx = Math.round(camera.worldToScreen(c * tileSize, 0).x);
+                        const sy = Math.round(camera.worldToScreen(0, r * tileSize).y);
+                        if (gid === 3) {
+                            if (useImg) {
+                                const srcX = (c * srcBrickW) % (2400 - srcBrickW);
+                                ctx.drawImage(groundImage, srcX, srcTopY, srcBrickW, srcBrickH, sx, sy, tileSize, tileSize);
+                            } else {
+                                ctx.fillStyle = '#555';
+                                ctx.fillRect(sx, sy, tileSize, tileSize);
+                            }
+                        } else if (gid === 2) {
+                            ctx.fillStyle = '#4a8c3f';
+                            ctx.fillRect(sx, sy, tileSize, tileSize);
+                            ctx.fillStyle = '#5ca84d';
+                            ctx.fillRect(sx, sy, tileSize, 4);
+                        } else {
+                            ctx.fillStyle = '#5c3d2e';
+                            ctx.fillRect(sx, sy, tileSize, tileSize);
+                            ctx.fillStyle = '#4a3125';
+                            ctx.fillRect(sx + 4, sy + 6, 8, 6);
+                            ctx.fillRect(sx + 18, sy + 14, 10, 8);
+                        }
                     }
                 }
             },
@@ -241,11 +311,11 @@ class Game {
         if (startObj) {
             this.player.init(startObj.x, startObj.y - this.player.height);
         } else {
-            this.player.init(64, rows * tileSize - 4 * tileSize);
+            this.player.init(64, (rows - 4) * tileSize);
         }
 
         this.storyManager.loadTriggers(this.levelManager.tileMap);
-        this.levelManager.currentLevelName = 'demo_world';
+        this.levelManager.currentLevelName = 'level1';
     }
 
     update(deltaTime) {
@@ -272,8 +342,13 @@ class Game {
 
         this.hud.update();
 
-        if (this.player.health <= 0) {
+        if (this.levelManager.tileMap && this.player.y > this.levelManager.tileMap.worldHeight + 64) {
+            this.player.health = 0;
             this.gameOver = true;
+            this.gameOverReason = 'fall';
+        } else if (this.player.health <= 0) {
+            this.gameOver = true;
+            this.gameOverReason = 'death';
         }
     }
 
@@ -321,16 +396,34 @@ class Game {
     }
 
     drawGameOver(ctx) {
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
         ctx.fillRect(0, 0, this.width, this.height);
-        ctx.fillStyle = '#cc3333';
-        ctx.font = 'bold 40px monospace';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('YOU DIED', this.width / 2, this.height / 2 - 30);
+
+        const cx = this.width / 2;
+        const cy = this.height / 2;
+
+        if (this.gameOverReason === 'fall') {
+            ctx.fillStyle = '#cc5522';
+            ctx.font = 'bold 48px monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('YOU FAILED', cx, cy - 30);
+
+            ctx.fillStyle = '#aa9977';
+            ctx.font = '14px monospace';
+            ctx.fillText('You fell into the abyss...', cx, cy + 15);
+        } else {
+            ctx.fillStyle = '#cc3333';
+            ctx.font = 'bold 48px monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('YOU DIED', cx, cy - 30);
+        }
+
         ctx.fillStyle = '#ccaa55';
         ctx.font = '16px monospace';
-        ctx.fillText('Press R to restart', this.width / 2, this.height / 2 + 20);
+        ctx.textAlign = 'center';
+        ctx.fillText('Press R to restart', cx, cy + 50);
         ctx.textAlign = 'left';
     }
 
@@ -351,6 +444,7 @@ class Game {
 
     restart() {
         this.gameOver = false;
+        this.gameOverReason = '';
         const startObj = this.levelManager.tileMap?.getObjectsByType('playerStart')[0];
         if (startObj) {
             this.player.init(startObj.x, startObj.y - this.player.height);
@@ -363,6 +457,16 @@ window.addEventListener('load', async () => {
     const ctx = canvas.getContext('2d');
     canvas.width = CANVAS_WIDTH;
     canvas.height = CANVAS_HEIGHT;
+
+    function fitCanvas() {
+        const scaleX = window.innerWidth / CANVAS_WIDTH;
+        const scaleY = window.innerHeight / CANVAS_HEIGHT;
+        const scale = Math.min(scaleX, scaleY);
+        canvas.style.width = Math.floor(CANVAS_WIDTH * scale) + 'px';
+        canvas.style.height = Math.floor(CANVAS_HEIGHT * scale) + 'px';
+    }
+    fitCanvas();
+    window.addEventListener('resize', fitCanvas);
 
     const game = new Game(canvas);
     await game.init();

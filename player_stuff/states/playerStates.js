@@ -16,9 +16,7 @@ export class Idle extends State {
     }
 
     enter() {
-        this.entity.frameX = 0;
-        this.entity.frameY = this.entity.config.animations?.idle?.row ?? 0;
-        this.entity.maxFrame = this.entity.config.animations?.idle?.frames ?? 3;
+        this.entity.setAnimation('idle');
         this.entity.vx = 0;
     }
 
@@ -40,9 +38,7 @@ export class Running extends State {
     }
 
     enter() {
-        this.entity.frameX = 0;
-        this.entity.frameY = this.entity.config.animations?.run?.row ?? 1;
-        this.entity.maxFrame = this.entity.config.animations?.run?.frames ?? 5;
+        this.entity.setAnimation('run');
     }
 
     handleInput(input) {
@@ -71,9 +67,7 @@ export class Jumping extends State {
     }
 
     enter() {
-        this.entity.frameX = 0;
-        this.entity.frameY = this.entity.config.animations?.jump?.row ?? 2;
-        this.entity.maxFrame = this.entity.config.animations?.jump?.frames ?? 3;
+        this.entity.setAnimation('jump');
         if (this.entity.onGround) {
             this.entity.vy = this.entity.jumpForce;
             this.entity.onGround = false;
@@ -104,9 +98,7 @@ export class Falling extends State {
     }
 
     enter() {
-        this.entity.frameX = 0;
-        this.entity.frameY = this.entity.config.animations?.fall?.row ?? 3;
-        this.entity.maxFrame = this.entity.config.animations?.fall?.frames ?? 2;
+        this.entity.setAnimation('fall');
     }
 
     handleInput(input) {
@@ -133,9 +125,7 @@ export class Attacking extends State {
     }
 
     enter() {
-        this.entity.frameX = 0;
-        this.entity.frameY = this.entity.config.animations?.attack?.row ?? 4;
-        this.entity.maxFrame = this.entity.config.animations?.attack?.frames ?? 4;
+        this.entity.setAnimation('attack');
         this.entity.vx = 0;
         this.attackFired = false;
     }
@@ -158,9 +148,7 @@ export class Hurt extends State {
     }
 
     enter() {
-        this.entity.frameX = 0;
-        this.entity.frameY = this.entity.config.animations?.hurt?.row ?? 5;
-        this.entity.maxFrame = this.entity.config.animations?.hurt?.frames ?? 2;
+        this.entity.setAnimation('hurt');
         this.entity.vx = 0;
     }
 
@@ -177,9 +165,7 @@ export class Dead extends State {
     }
 
     enter() {
-        this.entity.frameX = 0;
-        this.entity.frameY = this.entity.config.animations?.dead?.row ?? 6;
-        this.entity.maxFrame = this.entity.config.animations?.dead?.frames ?? 5;
+        this.entity.setAnimation('dead');
         this.entity.vx = 0;
         this.entity.vy = 0;
     }

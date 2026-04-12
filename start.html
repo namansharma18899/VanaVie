@@ -197,28 +197,31 @@
             {
                 name: 'Archer',
                 description: 'Fast and agile. Strikes from a distance.',
-                portrait: 'assets/sprites/archer_portrait.png',
-                spriteSrc: 'assets/sprites/archer_sheet.png',
-                spriteWidth: 64,
-                spriteHeight: 64,
-                drawWidth: 64,
-                drawHeight: 64,
+                spriteWidth: 128,
+                spriteHeight: 128,
+                drawWidth: 128,
+                drawHeight: 128,
                 speed: 4,
                 jumpForce: -13,
                 maxHealth: 75,
                 damage: 12,
-                hitboxOffsetX: 18,
-                hitboxOffsetY: 10,
-                hitboxWidth: 28,
-                hitboxHeight: 54,
+                hitboxOffsetX: 36,
+                hitboxOffsetY: 36,
+                hitboxWidth: 48,
+                hitboxHeight: 84,
+                projectile: {
+                    src: 'assets/sprites/Archer/Arrow.png',
+                    width: 48,
+                    height: 16,
+                },
                 animations: {
-                    idle:   { row: 0, frames: 3 },
-                    run:    { row: 1, frames: 5 },
-                    jump:   { row: 2, frames: 3 },
-                    fall:   { row: 3, frames: 2 },
-                    attack: { row: 4, frames: 6 },
-                    hurt:   { row: 5, frames: 2 },
-                    dead:   { row: 6, frames: 5 },
+                    idle:   { src: 'assets/sprites/Archer/Idle.png', frames: 5 },
+                    run:    { src: 'assets/sprites/Archer/Run.png', frames: 7 },
+                    jump:   { src: 'assets/sprites/Archer/Jump.png', frames: 8 },
+                    fall:   { src: 'assets/sprites/Archer/Jump.png', frames: 8 },
+                    attack: { src: 'assets/sprites/Archer/Attack_1.png', frames: 3 },
+                    hurt:   { src: 'assets/sprites/Archer/Hurt.png', frames: 2 },
+                    dead:   { src: 'assets/sprites/Archer/Dead.png', frames: 2 },
                 },
             },
             {
@@ -287,11 +290,33 @@
             nameEl.textContent = char.name;
             descEl.textContent = char.description;
 
+            portraitEl.innerHTML = '<span class="placeholder">?</span>';
+
+            const src = char.portrait || char.animations?.idle?.src || char.spriteSrc;
+            if (!src) return;
+
             const img = new Image();
-            img.src = char.portrait;
+            img.src = src;
             img.onload = () => {
+                if (src === char.portrait) {
+                    portraitEl.innerHTML = '';
+                    portraitEl.appendChild(img);
+                    return;
+                }
+                const frameW = char.spriteWidth || 64;
+                const frameH = char.spriteHeight || 64;
+                const canvas = document.createElement('canvas');
+                canvas.width = 160;
+                canvas.height = 160;
+                canvas.style.imageRendering = 'pixelated';
+                const c = canvas.getContext('2d');
+                c.imageSmoothingEnabled = false;
+                const scale = Math.min(160 / frameW, 160 / frameH);
+                const dw = frameW * scale;
+                const dh = frameH * scale;
+                c.drawImage(img, 0, 0, frameW, frameH, (160 - dw) / 2, (160 - dh) / 2, dw, dh);
                 portraitEl.innerHTML = '';
-                portraitEl.appendChild(img);
+                portraitEl.appendChild(canvas);
             };
             img.onerror = () => {
                 portraitEl.innerHTML = '<span class="placeholder">?</span>';
