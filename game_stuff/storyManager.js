@@ -7,9 +7,15 @@ export class StoryManager {
         this.dialogQueue = [];
         this.dialogIndex = 0;
         this.displayedText = '';
+        this.currentSpeaker = '';
         this.textTimer = 0;
         this.textSpeed = 30;
         this.waitingForInput = false;
+
+        this.portraitImages = {};
+        this.onDialogStart = null;
+        this.onDialogEnd = null;
+        this._cooldown = 0;
     }
 
     loadTriggers(tileMap) {
@@ -18,8 +24,12 @@ export class StoryManager {
         this.dialogQueue = [];
     }
 
+    addManualTrigger(trigger) {
+        this.triggers.push(trigger);
+    }
+
     checkTriggers(player) {
-        if (this.activeDialog) return;
+        if (this.activeDialog || this._cooldown > 0) return;
 
         const px = player.x + player.hitboxOffsetX;
         const py = player.y + player.hitboxOffsetY;
@@ -37,36 +47,82 @@ export class StoryManager {
         }
     }
 
+    startDialogDirect(config) {
+        if (this._cooldown > 0) return;
+        const text = config.text || '';
+        if (!text) return;
+
+        this._parseAndStartDialog(text, config);
+    }
+
     startDialog(trigger) {
         const text = trigger.properties.text || trigger.properties.dialog || '';
         if (!text) return;
 
-        this.dialogQueue = text.split('|');
-        this.dialogIndex = 0;
-        this.displayedText = '';
-        this.textTimer = 0;
-        this.waitingForInput = false;
-        this.activeDialog = trigger;
-
         if (trigger.properties.oneShot) {
             this.firedTriggers.add(trigger.name);
+        }
+
+        this._parseAndStartDialog(text, trigger.properties);
+        this.activeDialog = trigger;
+    }
+
+    _parseAndStartDialog(text, properties) {
+        const rawLines = text.split('|');
+        this.dialogQueue = rawLines.map(line => {
+            const colonIdx = line.indexOf(':');
+            if (colonIdx > 0 && colonIdx < 30) {
+                const speaker = line.substring(0, colonIdx).trim();
+                const msg = line.substring(colonIdx + 1).trim();
+                return { speaker, text: msg };
+            }
+            return { speaker: properties.speaker || '', text: line.trim() };
+        });
+
+        if (properties.portraits) {
+            try {
+                const portraitMap = typeof properties.portraits === 'string'
+                    ? JSON.parse(properties.portraits)
+                    : properties.portraits;
+                for (const [name, src] of Object.entries(portraitMap)) {
+                    if (!this.portraitImages[name]) {
+                        const img = new Image();
+                        img.src = src;
+                        this.portraitImages[name] = img;
+                    }
+                }
+            } catch (_e) { /* ignore bad JSON */ }
+        }
+
+        this.dialogIndex = 0;
+        this.displayedText = '';
+        this.currentSpeaker = this.dialogQueue[0]?.speaker || '';
+        this.textTimer = 0;
+        this.waitingForInput = false;
+        this.activeDialog = {};
+
+        if (this.onDialogStart) {
+            this.onDialogStart(properties);
         }
     }
 
     update(deltaTime, input) {
+        if (this._cooldown > 0) this._cooldown -= deltaTime;
         if (!this.activeDialog) return;
 
         const kb = this.game.input.keyBindings;
-        const currentMessage = this.dialogQueue[this.dialogIndex];
+        const entry = this.dialogQueue[this.dialogIndex];
+        const currentMessage = entry.text;
 
         if (this.waitingForInput) {
             if (input.includes(kb.interact) || input.includes(kb.attack)) {
                 this.dialogIndex++;
                 if (this.dialogIndex >= this.dialogQueue.length) {
-                    this.activeDialog = null;
-                    this.dialogQueue = [];
+                    this._endDialog();
                     return;
                 }
+                const next = this.dialogQueue[this.dialogIndex];
+                this.currentSpeaker = next.speaker;
                 this.displayedText = '';
                 this.textTimer = 0;
                 this.waitingForInput = false;
@@ -84,42 +140,69 @@ export class StoryManager {
         }
     }
 
+    _endDialog() {
+        const props = this.activeDialog?.properties || {};
+        this.activeDialog = null;
+        this.dialogQueue = [];
+        this.currentSpeaker = '';
+        this._cooldown = 300;
+
+        if (this.onDialogEnd) {
+            this.onDialogEnd(props);
+        }
+    }
+
     draw(ctx) {
         if (!this.activeDialog) return;
 
         const canvasW = ctx.canvas.width;
         const canvasH = ctx.canvas.height;
-        const boxH = 100;
+        const boxH = 110;
         const boxY = canvasH - boxH - 20;
         const boxX = 40;
         const boxW = canvasW - 80;
 
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+        let portraitSize = 0;
+        const portrait = this.portraitImages[this.currentSpeaker];
+        const hasPortrait = portrait?.complete && portrait.naturalWidth;
+        if (hasPortrait) portraitSize = 80;
+
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
         ctx.strokeStyle = '#ccaa55';
         ctx.lineWidth = 2;
         roundRect(ctx, boxX, boxY, boxW, boxH, 8);
         ctx.fill();
         ctx.stroke();
 
-        ctx.fillStyle = '#ffffff';
-        ctx.font = '16px monospace';
-        ctx.textBaseline = 'top';
-
-        const speaker = this.activeDialog.properties.speaker || '';
-        if (speaker) {
-            ctx.fillStyle = '#ccaa55';
-            ctx.font = 'bold 14px monospace';
-            ctx.fillText(speaker, boxX + 16, boxY + 12);
-            ctx.fillStyle = '#ffffff';
-            ctx.font = '16px monospace';
+        if (hasPortrait) {
+            const pX = boxX + 10;
+            const pY = boxY + (boxH - portraitSize) / 2;
+            ctx.strokeStyle = '#887744';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(pX, pY, portraitSize, portraitSize);
+            ctx.drawImage(portrait, pX, pY, portraitSize, portraitSize);
         }
 
-        const textY = speaker ? boxY + 34 : boxY + 16;
-        wrapText(ctx, this.displayedText, boxX + 16, textY, boxW - 32, 22);
+        const textStartX = boxX + 16 + (hasPortrait ? portraitSize + 10 : 0);
+        const textW = boxW - 32 - (hasPortrait ? portraitSize + 10 : 0);
+
+        if (this.currentSpeaker) {
+            ctx.fillStyle = '#ccaa55';
+            ctx.font = 'bold 14px monospace';
+            ctx.textBaseline = 'top';
+            ctx.fillText(this.currentSpeaker, textStartX, boxY + 10);
+        }
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '15px monospace';
+        ctx.textBaseline = 'top';
+        const textY = this.currentSpeaker ? boxY + 32 : boxY + 16;
+        wrapText(ctx, this.displayedText, textStartX, textY, textW, 20);
 
         if (this.waitingForInput) {
             ctx.fillStyle = '#ccaa55';
             ctx.font = '12px monospace';
+            ctx.textBaseline = 'top';
             ctx.fillText('Press [E] to continue...', boxX + boxW - 180, boxY + boxH - 18);
         }
     }

@@ -1,4 +1,5 @@
 import { EnemyIdle, EnemyPatrol, EnemyChase, EnemyAttack, EnemyHurt, EnemyDead } from './enemyStates.js';
+import { EnemyProjectile } from './enemyProjectile.js';
 
 const EnemyState = Object.freeze({
     IDLE: 0,
@@ -10,6 +11,15 @@ const EnemyState = Object.freeze({
 });
 
 export { EnemyState };
+
+let _alertImage = null;
+function getAlertImage() {
+    if (!_alertImage) {
+        _alertImage = new Image();
+        _alertImage.src = 'assets/sprites/Enemy/alert/bolt_bronze.png';
+    }
+    return _alertImage;
+}
 
 export class Enemy {
     constructor(game, config) {
@@ -47,8 +57,42 @@ export class Enemy {
         this.hitboxWidth = config.hitboxWidth || 40;
         this.hitboxHeight = config.hitboxHeight || 52;
 
-        this.image = new Image();
-        this.image.src = config.spriteSrc || '';
+        this.isRanged = config.isRanged || false;
+        this.projectileRange = config.projectileRange || 250;
+        this.projectiles = [];
+        this.projectileConfig = config.projectileConfig || null;
+        this._projectileImage = null;
+        if (this.projectileConfig?.src) {
+            this._projectileImage = new Image();
+            this._projectileImage.src = this.projectileConfig.src;
+        }
+
+        this.alerted = false;
+        this.alertTimer = 0;
+        this.alertImage = getAlertImage();
+
+        this.hitInvincibilityTimer = 0;
+        this.hitInvincibilityDuration = 400;
+
+        this.image = null;
+        this.activeImage = null;
+        this.animationImages = {};
+
+        if (config.spriteSrc) {
+            this.image = new Image();
+            this.image.src = config.spriteSrc;
+            this.activeImage = this.image;
+        }
+
+        const anims = config.animations || {};
+        for (const [name, anim] of Object.entries(anims)) {
+            if (anim.src) {
+                const img = new Image();
+                img.src = anim.src;
+                this.animationImages[name] = img;
+            }
+        }
+
         this.frameX = 0;
         this.frameY = 0;
         this.maxFrame = 0;
@@ -66,7 +110,21 @@ export class Enemy {
             new EnemyDead(this),
         ];
         this.currentState = null;
-        this.setState(EnemyState.IDLE);
+        this.setState(EnemyState.PATROL);
+    }
+
+    setAnimation(animName) {
+        const anim = this.config.animations?.[animName];
+        if (!anim) return;
+        this.frameX = 0;
+        this.maxFrame = anim.frames ?? 3;
+        if (this.animationImages[animName]) {
+            this.activeImage = this.animationImages[animName];
+            this.frameY = 0;
+        } else {
+            this.activeImage = this.image;
+            this.frameY = anim.row ?? 0;
+        }
     }
 
     setState(stateIndex) {
@@ -74,14 +132,47 @@ export class Enemy {
         this.currentState.enter();
     }
 
+    fireProjectile(player) {
+        const playerCX = player.x + player.width / 2;
+        const enemyCX = this.x + this.width / 2;
+        const direction = playerCX > enemyCX ? 1 : -1;
+
+        const spawnX = direction > 0
+            ? this.x + this.width
+            : this.x - (this.projectileConfig?.height || 54);
+        const spawnY = this.y + this.height / 2 - (this.projectileConfig?.width || 9) / 2;
+
+        const proj = new EnemyProjectile(spawnX, spawnY, direction, {
+            ...this.projectileConfig,
+            image: this._projectileImage,
+            damage: this.projectileConfig?.damage || this.damage,
+        });
+        this.projectiles.push(proj);
+    }
+
     update(deltaTime, player) {
         if (this.currentState) {
-            this.currentState.handleInput(player);
+            this.currentState.handleInput(player, deltaTime);
         }
 
         this.vy += this.gravity;
 
         if (this.attackCooldown > 0) this.attackCooldown -= deltaTime;
+        if (this.hitInvincibilityTimer > 0) this.hitInvincibilityTimer -= deltaTime;
+        if (this.alertTimer > 0) {
+            this.alertTimer -= deltaTime;
+            if (this.alertTimer <= 0) {
+                this.alerted = false;
+                this.alertTimer = 0;
+            }
+        }
+
+        for (let i = this.projectiles.length - 1; i >= 0; i--) {
+            this.projectiles[i].update(deltaTime);
+            if (this.projectiles[i].markedForDeletion) {
+                this.projectiles.splice(i, 1);
+            }
+        }
 
         this.advanceFrame(deltaTime);
     }
@@ -98,34 +189,67 @@ export class Enemy {
     draw(ctx, camera) {
         if (!camera.isVisible(this.x, this.y, this.width, this.height)) return;
 
+        const img = this.activeImage || this.image;
+        if (!img) return;
+
         const screen = camera.worldToScreen(this.x, this.y);
+        const s = camera.scale;
+        const dw = this.width * s;
+        const dh = this.height * s;
 
         ctx.save();
         if (!this.facingRight) {
-            ctx.translate(screen.x + this.width, screen.y);
+            ctx.translate(screen.x + dw, screen.y);
             ctx.scale(-1, 1);
             ctx.drawImage(
-                this.image,
+                img,
                 this.frameX * this.spriteWidth, this.frameY * this.spriteHeight,
                 this.spriteWidth, this.spriteHeight,
                 0, 0,
-                this.width, this.height
+                dw, dh
             );
         } else {
             ctx.drawImage(
-                this.image,
+                img,
                 this.frameX * this.spriteWidth, this.frameY * this.spriteHeight,
                 this.spriteWidth, this.spriteHeight,
                 screen.x, screen.y,
-                this.width, this.height
+                dw, dh
             );
         }
         ctx.restore();
+
+        if (this.alerted && this.alertImage?.complete && this.alertImage.naturalWidth) {
+            const iconW = 19 * s;
+            const iconH = 30 * s;
+            const iconX = screen.x + (dw - iconW) / 2;
+            const iconY = screen.y - iconH - 4 * s;
+            const pulse = 0.8 + 0.2 * Math.sin(Date.now() / 200);
+            ctx.globalAlpha = pulse;
+            ctx.drawImage(this.alertImage, iconX, iconY, iconW, iconH);
+            ctx.globalAlpha = 1.0;
+        }
+
+        for (const proj of this.projectiles) {
+            proj.draw(ctx, camera);
+        }
     }
 
     takeDamage(amount) {
         if (this.currentState === this.states[EnemyState.DEAD]) return;
+        if (this.hitInvincibilityTimer > 0) return;
+
         this.health = Math.max(0, this.health - amount);
+        this.hitInvincibilityTimer = this.hitInvincibilityDuration;
+
+        if (!this.alerted) {
+            this.alerted = true;
+            this.alertTimer = 6000;
+        }
+        if (this.game?.enemyManager) {
+            this.game.enemyManager.alertNearby(this);
+        }
+
         if (this.health <= 0) {
             this.setState(EnemyState.DEAD);
         } else {

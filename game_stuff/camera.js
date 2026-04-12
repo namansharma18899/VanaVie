@@ -9,6 +9,12 @@ export class Camera {
         this.smoothing = 0.08;
         this.target = null;
         this.lockY = false;
+
+        this.scale = 1.0;
+        this.targetScale = 1.0;
+        this.scaleSmoothing = 0.04;
+        this._zoomFocusX = null;
+        this._zoomFocusY = null;
     }
 
     setWorldBounds(width, height) {
@@ -20,14 +26,48 @@ export class Camera {
         this.target = target;
     }
 
+    zoomTo(scale, focusWorldX, focusWorldY) {
+        this.targetScale = scale;
+        this._zoomFocusX = focusWorldX ?? null;
+        this._zoomFocusY = focusWorldY ?? null;
+    }
+
+    resetZoom() {
+        this.targetScale = 1.0;
+        this._zoomFocusX = null;
+        this._zoomFocusY = null;
+    }
+
+    isZooming() {
+        return Math.abs(this.scale - this.targetScale) > 0.005;
+    }
+
     update() {
+        if (this.scale !== this.targetScale) {
+            this.scale += (this.targetScale - this.scale) * this.scaleSmoothing;
+            if (Math.abs(this.scale - this.targetScale) < 0.001) {
+                this.scale = this.targetScale;
+            }
+        }
+
         if (!this.target) return;
 
-        const targetX = this.target.x + this.target.width / 2 - this.viewportWidth / 2;
+        const effectiveVW = this.viewportWidth / this.scale;
+        const effectiveVH = this.viewportHeight / this.scale;
+
+        let targetX;
+        if (this._zoomFocusX !== null) {
+            targetX = this._zoomFocusX - effectiveVW / 2;
+        } else {
+            targetX = this.target.x + this.target.width / 2 - effectiveVW / 2;
+        }
         this.x += (targetX - this.x) * this.smoothing;
 
-        if (!this.lockY && this.target.onGround) {
-            const targetY = this.target.y + this.target.height / 2 - this.viewportHeight / 2;
+        if (this._zoomFocusY !== null) {
+            const targetY = this._zoomFocusY - effectiveVH / 2;
+            this.y += (targetY - this.y) * this.smoothing;
+        } else if (!this.lockY && this.target.onGround) {
+            const targetY = this.target.y + this.target.height / 2 - effectiveVH / 2;
             this.y += (targetY - this.y) * this.smoothing;
         }
 
@@ -38,23 +78,27 @@ export class Camera {
     }
 
     clamp() {
-        this.x = Math.max(0, Math.min(this.x, this.worldWidth - this.viewportWidth));
-        this.y = Math.max(0, Math.min(this.y, this.worldHeight - this.viewportHeight));
+        const effectiveVW = this.viewportWidth / this.scale;
+        const effectiveVH = this.viewportHeight / this.scale;
+        this.x = Math.max(0, Math.min(this.x, this.worldWidth - effectiveVW));
+        this.y = Math.max(0, Math.min(this.y, this.worldHeight - effectiveVH));
     }
 
     worldToScreen(worldX, worldY) {
         return {
-            x: worldX - this.x,
-            y: worldY - this.y,
+            x: (worldX - this.x) * this.scale,
+            y: (worldY - this.y) * this.scale,
         };
     }
 
     isVisible(worldX, worldY, width, height) {
+        const effectiveVW = this.viewportWidth / this.scale;
+        const effectiveVH = this.viewportHeight / this.scale;
         return (
             worldX + width > this.x &&
-            worldX < this.x + this.viewportWidth &&
+            worldX < this.x + effectiveVW &&
             worldY + height > this.y &&
-            worldY < this.y + this.viewportHeight
+            worldY < this.y + effectiveVH
         );
     }
 }

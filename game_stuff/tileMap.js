@@ -105,10 +105,16 @@ export class TileMap {
         const layer = this.layers[layerName];
         if (!layer || layer.type !== 'tile' || !layer.visible) return;
 
+        const effectiveVW = camera.viewportWidth / camera.scale;
+        const effectiveVH = camera.viewportHeight / camera.scale;
         const startCol = Math.max(0, Math.floor(camera.x / this.tileWidth));
-        const endCol = Math.min(this.cols, Math.ceil((camera.x + camera.viewportWidth) / this.tileWidth) + 1);
+        const endCol = Math.min(this.cols, Math.ceil((camera.x + effectiveVW) / this.tileWidth) + 1);
         const startRow = Math.max(0, Math.floor(camera.y / this.tileHeight));
-        const endRow = Math.min(this.rows, Math.ceil((camera.y + camera.viewportHeight) / this.tileHeight) + 1);
+        const endRow = Math.min(this.rows, Math.ceil((camera.y + effectiveVH) / this.tileHeight) + 1);
+
+        const s = camera.scale;
+        const drawW = Math.ceil(this.tileWidth * s);
+        const drawH = Math.ceil(this.tileHeight * s);
 
         for (let row = startRow; row < endRow; row++) {
             for (let col = startCol; col < endCol; col++) {
@@ -129,7 +135,7 @@ export class TileMap {
                     srcX, srcY,
                     tileset.tileWidth, tileset.tileHeight,
                     Math.round(screenPos.x), Math.round(screenPos.y),
-                    this.tileWidth, this.tileHeight
+                    drawW, drawH
                 );
             }
         }

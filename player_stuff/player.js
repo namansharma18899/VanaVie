@@ -158,17 +158,20 @@ export class Player {
         if (!img) return;
 
         const screen = camera.worldToScreen(this.x, this.y);
+        const s = camera.scale;
+        const dw = this.width * s;
+        const dh = this.height * s;
 
         ctx.save();
         if (!this.facingRight) {
-            ctx.translate(screen.x + this.width, screen.y);
+            ctx.translate(screen.x + dw, screen.y);
             ctx.scale(-1, 1);
             ctx.drawImage(
                 img,
                 this.frameX * this.spriteWidth, this.frameY * this.spriteHeight,
                 this.spriteWidth, this.spriteHeight,
                 0, 0,
-                this.width, this.height
+                dw, dh
             );
         } else {
             ctx.drawImage(
@@ -176,7 +179,7 @@ export class Player {
                 this.frameX * this.spriteWidth, this.frameY * this.spriteHeight,
                 this.spriteWidth, this.spriteHeight,
                 screen.x, screen.y,
-                this.width, this.height
+                dw, dh
             );
         }
         ctx.restore();

@@ -32,19 +32,22 @@ export class Projectile {
 
     draw(ctx, camera) {
         const screen = camera.worldToScreen(this.x, this.y);
+        const s = camera.scale;
+        const dw = this.width * s;
+        const dh = this.height * s;
         if (this.image?.complete && this.image.naturalWidth) {
             ctx.save();
             if (this.direction < 0) {
-                ctx.translate(screen.x + this.width, screen.y);
+                ctx.translate(screen.x + dw, screen.y);
                 ctx.scale(-1, 1);
-                ctx.drawImage(this.image, 0, 0, this.width, this.height);
+                ctx.drawImage(this.image, 0, 0, dw, dh);
             } else {
-                ctx.drawImage(this.image, screen.x, screen.y, this.width, this.height);
+                ctx.drawImage(this.image, screen.x, screen.y, dw, dh);
             }
             ctx.restore();
         } else {
             ctx.fillStyle = '#ffcc00';
-            ctx.fillRect(screen.x, screen.y, this.width, this.height);
+            ctx.fillRect(screen.x, screen.y, dw, dh);
         }
     }
 
