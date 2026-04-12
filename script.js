@@ -31,8 +31,10 @@ class Game {
         this.gameOver = false;
         this.gameOverReason = '';
         this.paused = false;
+        this.door = null;
 
-        this.debug = false;
+        this.devMode = new URLSearchParams(window.location.search).has('dev');
+        this.debug = this.devMode;
     }
 
     async init() {
@@ -147,18 +149,18 @@ class Game {
             hitboxWidth: 48,
             hitboxHeight: 84,
             projectile: {
-                src: 'assets/sprites/Archer/Arrow.png',
+                src: 'assets/sprites/Mainchar/Archer/Arrow.png',
                 width: 48,
                 height: 16,
             },
             animations: {
-                idle:   { src: 'assets/sprites/Archer/Idle.png', frames: 5 },
-                run:    { src: 'assets/sprites/Archer/Run.png', frames: 7 },
-                jump:   { src: 'assets/sprites/Archer/Jump.png', frames: 8 },
-                fall:   { src: 'assets/sprites/Archer/Jump.png', frames: 8 },
-                attack: { src: 'assets/sprites/Archer/Attack_1.png', frames: 3 },
-                hurt:   { src: 'assets/sprites/Archer/Hurt.png', frames: 2 },
-                dead:   { src: 'assets/sprites/Archer/Dead.png', frames: 2 },
+                idle:   { src: 'assets/sprites/Mainchar/Archer/Idle.png', frames: 5 },
+                run:    { src: 'assets/sprites/Mainchar/Archer/Run.png', frames: 7 },
+                jump:   { src: 'assets/sprites/Mainchar/Archer/Jump.png', frames: 8 },
+                fall:   { src: 'assets/sprites/Mainchar/Archer/Jump.png', frames: 8 },
+                attack: { src: 'assets/sprites/Mainchar/Archer/Attack_1.png', frames: 3 },
+                hurt:   { src: 'assets/sprites/Mainchar/Archer/Hurt.png', frames: 2 },
+                dead:   { src: 'assets/sprites/Mainchar/Archer/Dead.png', frames: 2 },
             },
         };
     }
@@ -196,7 +198,7 @@ class Game {
         for (let c = 75; c < 79; c++) setTile(rows - 5, c, 3);
         for (let c = 84; c < 88; c++) setTile(rows - 6, c, 3);
         for (let c = 100; c < 104; c++) setTile(rows - 4, c, 3);
-        for (let c = 110; c < 114; c++) setTile(rows - 5, c, 3);
+        for (let c = 106; c < 109; c++) setTile(rows - 5, c, 3);
 
         for (let r = 0; r < rows; r++) setTile(r, 0, 1);
         for (let r = 0; r < rows; r++) setTile(r, cols - 1, 1);
@@ -306,6 +308,8 @@ class Game {
         };
 
         this.camera.setWorldBounds(this.levelManager.tileMap.worldWidth, this.levelManager.tileMap.worldHeight);
+        this.camera.y = 0;
+        this.camera.lockY = true;
 
         const startObj = this.levelManager.tileMap.getObjectsByType('playerStart')[0];
         if (startObj) {
@@ -315,11 +319,46 @@ class Game {
         }
 
         this.storyManager.loadTriggers(this.levelManager.tileMap);
+        if (this.devMode) {
+            for (const t of this.storyManager.triggers) {
+                this.storyManager.firedTriggers.add(t.name);
+            }
+        }
         this.levelManager.currentLevelName = 'level1';
+
+        const doorBasePath = 'assets/sprites/medivial/Objects/';
+        const doorImages = [];
+        for (let i = 1; i <= 4; i++) {
+            const img = new Image();
+            img.src = `${doorBasePath}door${i}.png`;
+            doorImages.push(img);
+        }
+        const doorW = 64;
+        const doorH = 80;
+        this.door = {
+            x: 112 * tileSize,
+            y: (rows - 2) * tileSize - doorH,
+            width: doorW,
+            height: doorH,
+            images: doorImages,
+            frameIndex: 0,
+            state: 'closed',
+            timer: 0,
+            fadeAlpha: 0,
+            playerScale: 1,
+        };
     }
 
     update(deltaTime) {
         if (this.paused || this.gameOver) return;
+
+        if (this.door && this.door.state !== 'closed') {
+            this.updateDoor(deltaTime);
+            if (this.door.state === 'walking') this.player.advanceFrame(deltaTime);
+            this.camera.follow(this.player);
+            this.camera.update();
+            return;
+        }
 
         if (this.storyManager.isActive()) {
             this.storyManager.update(deltaTime, this.input.keys);
@@ -337,6 +376,8 @@ class Game {
         this.levelManager.checkExits(this.player);
         this.levelManager.update();
 
+        if (this.door) this.checkDoorInteraction();
+
         this.camera.follow(this.player);
         this.camera.update();
 
@@ -349,6 +390,80 @@ class Game {
         } else if (this.player.health <= 0) {
             this.gameOver = true;
             this.gameOverReason = 'death';
+        }
+    }
+
+    checkDoorInteraction() {
+        const d = this.door;
+        const p = this.player;
+        const px = p.x + p.hitboxOffsetX;
+        const py = p.y + p.hitboxOffsetY;
+        const near = px + p.hitboxWidth > d.x && px < d.x + d.width &&
+                     py + p.hitboxHeight > d.y && py < d.y + d.height;
+
+        if (near && this.input.keys.includes(this.input.keyBindings.interact)) {
+            d.state = 'opening';
+            d.timer = 0;
+            d.frameIndex = 0;
+        }
+    }
+
+    updateDoor(deltaTime) {
+        const d = this.door;
+        d.timer += deltaTime;
+        const ease = t => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+
+        if (d.state === 'opening') {
+            const frameTime = 200;
+            d.frameIndex = Math.min(3, Math.floor(d.timer / frameTime));
+            if (d.timer >= frameTime * 4) {
+                d.state = 'walking';
+                d.timer = 0;
+                this.player.setAnimation('run');
+            }
+        } else if (d.state === 'walking') {
+            const doorCenterX = d.x + d.width / 2 - this.player.width / 2;
+            const dist = doorCenterX - this.player.x;
+            this.player.vx = 0;
+            this.player.vy = 0;
+            this.player.facingRight = dist >= 0;
+
+            if (Math.abs(dist) > 4) {
+                this.player.x += dist * 0.06;
+            } else {
+                this.player.x = doorCenterX;
+                d.state = 'entering';
+                d.timer = 0;
+                d.playerScale = 1;
+                this.player.setAnimation('idle');
+            }
+        } else if (d.state === 'entering') {
+            const duration = 800;
+            const t = Math.min(1, d.timer / duration);
+            const e = ease(t);
+
+            const doorCenterX = d.x + d.width / 2 - this.player.width / 2;
+            const doorCenterY = d.y + d.height * 0.4 - this.player.height / 2;
+            this.player.x = doorCenterX;
+            this.player.y += (doorCenterY - this.player.y) * 0.05;
+            this.player.vx = 0;
+            this.player.vy = 0;
+
+            d.playerScale = Math.max(0, 1 - e);
+
+            if (t >= 1) {
+                d.state = 'fading';
+                d.timer = 0;
+                d.fadeAlpha = 0;
+            }
+        } else if (d.state === 'fading') {
+            const duration = 1200;
+            const t = Math.min(1, d.timer / duration);
+            d.fadeAlpha = ease(t);
+            if (t >= 1) {
+                d.state = 'complete';
+                d.timer = 0;
+            }
         }
     }
 
@@ -368,8 +483,10 @@ class Game {
             this.levelManager.tileMap.drawLayer(ctx, this.camera, 'terrain');
         }
 
+        if (this.door) this.drawDoor(ctx);
+
         this.enemyManager.draw(ctx, this.camera);
-        this.player.draw(ctx, this.camera);
+        this.drawPlayer(ctx);
 
         if (this.levelManager.tileMap) {
             this.levelManager.tileMap.drawLayer(ctx, this.camera, 'foreground');
@@ -378,6 +495,24 @@ class Game {
         this.hud.draw(ctx);
         this.storyManager.draw(ctx);
         this.levelManager.drawFade(ctx);
+
+        if (this.door && this.door.state === 'fading') {
+            ctx.fillStyle = `rgba(0, 0, 0, ${this.door.fadeAlpha})`;
+            ctx.fillRect(0, 0, this.width, this.height);
+        }
+        if (this.door && this.door.state === 'complete') {
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, this.width, this.height);
+            ctx.fillStyle = '#ccaa55';
+            ctx.font = 'bold 36px monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('LEVEL COMPLETE', this.width / 2, this.height / 2 - 20);
+            ctx.fillStyle = '#887755';
+            ctx.font = '14px monospace';
+            ctx.fillText('To be continued...', this.width / 2, this.height / 2 + 25);
+            ctx.textAlign = 'left';
+        }
 
         if (this.debug) this.drawDebug(ctx);
 
@@ -392,6 +527,62 @@ class Game {
             ctx.textBaseline = 'middle';
             ctx.fillText('PAUSED', this.width / 2, this.height / 2);
             ctx.textAlign = 'left';
+        }
+    }
+
+    drawDoor(ctx) {
+        const d = this.door;
+        const img = d.images[d.frameIndex];
+        if (!img?.complete || !img.naturalWidth) return;
+        const screen = this.camera.worldToScreen(d.x, d.y);
+
+        ctx.drawImage(img, screen.x, screen.y, d.width, d.height);
+
+        if (d.state === 'closed') {
+            const p = this.player;
+            const px = p.x + p.hitboxOffsetX + p.hitboxWidth / 2;
+            const dist = Math.abs(px - (d.x + d.width / 2));
+            if (dist < 120) {
+                const alpha = Math.max(0, 1 - dist / 120) * (0.7 + 0.3 * Math.sin(performance.now() / 400));
+                ctx.save();
+                ctx.globalAlpha = alpha;
+                ctx.fillStyle = '#ccaa55';
+                ctx.font = 'bold 11px monospace';
+                ctx.textAlign = 'center';
+                ctx.fillText('[E] Enter', screen.x + d.width / 2, screen.y - 8);
+                ctx.restore();
+            }
+        }
+    }
+
+    drawPlayer(ctx) {
+        if (this.door && (this.door.state === 'fading' || this.door.state === 'complete')) {
+            return;
+        }
+        if (this.door && this.door.state === 'entering') {
+            const scale = this.door.playerScale;
+            if (scale <= 0) return;
+            const p = this.player;
+            const img = p.activeImage || p.image;
+            if (!img) return;
+
+            const screen = this.camera.worldToScreen(p.x, p.y);
+            const w = p.width * scale;
+            const h = p.height * scale;
+            const cx = screen.x + p.width / 2;
+            const cy = screen.y + p.height / 2;
+
+            ctx.save();
+            ctx.globalAlpha = Math.max(0.05, scale);
+            ctx.drawImage(
+                img,
+                p.frameX * p.spriteWidth, p.frameY * p.spriteHeight,
+                p.spriteWidth, p.spriteHeight,
+                cx - w / 2, cy - h / 2, w, h
+            );
+            ctx.restore();
+        } else {
+            this.player.draw(ctx, this.camera);
         }
     }
 

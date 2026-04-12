@@ -8,6 +8,7 @@ export class Camera {
         this.worldHeight = 0;
         this.smoothing = 0.08;
         this.target = null;
+        this.lockY = false;
     }
 
     setWorldBounds(width, height) {
@@ -23,10 +24,15 @@ export class Camera {
         if (!this.target) return;
 
         const targetX = this.target.x + this.target.width / 2 - this.viewportWidth / 2;
-        const targetY = this.target.y + this.target.height / 2 - this.viewportHeight / 2;
-
         this.x += (targetX - this.x) * this.smoothing;
-        this.y += (targetY - this.y) * this.smoothing;
+
+        if (!this.lockY && this.target.onGround) {
+            const targetY = this.target.y + this.target.height / 2 - this.viewportHeight / 2;
+            this.y += (targetY - this.y) * this.smoothing;
+        }
+
+        this.x = Math.round(this.x);
+        this.y = Math.round(this.y);
 
         this.clamp();
     }
