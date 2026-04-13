@@ -20,7 +20,7 @@ export class NPC {
 
         this.frameX = 0;
         this.frameY = 0;
-        this.maxFrame = config.idleFrames ?? 5;
+        this.maxFrame = (config.idleFrames ?? 6) - 1;
         this.fps = config.fps || 8;
         this.frameTimer = 0;
 
@@ -34,11 +34,11 @@ export class NPC {
     }
 
     update(deltaTime) {
-        if (this.frameTimer > 1000 / this.fps) {
-            this.frameTimer = 0;
+        this.frameTimer += deltaTime;
+        const frameInterval = 1000 / this.fps;
+        if (this.frameTimer >= frameInterval) {
+            this.frameTimer -= frameInterval;
             this.frameX = this.frameX < this.maxFrame ? this.frameX + 1 : 0;
-        } else {
-            this.frameTimer += deltaTime;
         }
     }
 
@@ -50,12 +50,14 @@ export class NPC {
 
         const screen = camera.worldToScreen(this.x, this.y);
         const s = camera.scale;
-        const dw = this.width * s;
-        const dh = this.height * s;
+        const sx = Math.round(screen.x);
+        const sy = Math.round(screen.y);
+        const dw = Math.round(this.width * s);
+        const dh = Math.round(this.height * s);
 
         ctx.save();
         if (!this.facingRight) {
-            ctx.translate(screen.x + dw, screen.y);
+            ctx.translate(sx + dw, sy);
             ctx.scale(-1, 1);
             ctx.drawImage(
                 img,
@@ -69,7 +71,7 @@ export class NPC {
                 img,
                 this.frameX * this.spriteWidth, this.frameY * this.spriteHeight,
                 this.spriteWidth, this.spriteHeight,
-                screen.x, screen.y,
+                sx, sy,
                 dw, dh
             );
         }
@@ -145,7 +147,7 @@ export class NPCManager {
     }
 
     checkInteraction(player, input) {
-        if (this.game.storyManager.isActive()) return;
+        if (this.game.storyManager.isActive() || this.game.storyManager.isOnCooldown()) return;
 
         const kb = this.game.input.keyBindings;
         if (!input.includes(kb.interact)) return;

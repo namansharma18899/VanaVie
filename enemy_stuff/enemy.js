@@ -74,6 +74,11 @@ export class Enemy {
         this.hitInvincibilityTimer = 0;
         this.hitInvincibilityDuration = 400;
 
+        this.canJump = config.canJump || false;
+        this.jumpForce = config.jumpForce || -10;
+        this.jumpCooldown = 0;
+        this.jumpCooldownTime = 500;
+
         this.image = null;
         this.activeImage = null;
         this.animationImages = {};
@@ -117,7 +122,8 @@ export class Enemy {
         const anim = this.config.animations?.[animName];
         if (!anim) return;
         this.frameX = 0;
-        this.maxFrame = anim.frames ?? 3;
+        this.maxFrame = (anim.frames ?? 4) - 1;
+        this.frameTimer = 0;
         if (this.animationImages[animName]) {
             this.activeImage = this.animationImages[animName];
             this.frameY = 0;
@@ -150,6 +156,14 @@ export class Enemy {
         this.projectiles.push(proj);
     }
 
+    jump() {
+        if (this.onGround && this.jumpCooldown <= 0) {
+            this.vy = this.jumpForce;
+            this.onGround = false;
+            this.jumpCooldown = this.jumpCooldownTime;
+        }
+    }
+
     update(deltaTime, player) {
         if (this.currentState) {
             this.currentState.handleInput(player, deltaTime);
@@ -159,6 +173,7 @@ export class Enemy {
 
         if (this.attackCooldown > 0) this.attackCooldown -= deltaTime;
         if (this.hitInvincibilityTimer > 0) this.hitInvincibilityTimer -= deltaTime;
+        if (this.jumpCooldown > 0) this.jumpCooldown -= deltaTime;
         if (this.alertTimer > 0) {
             this.alertTimer -= deltaTime;
             if (this.alertTimer <= 0) {
@@ -178,11 +193,11 @@ export class Enemy {
     }
 
     advanceFrame(deltaTime) {
-        if (this.frameTimer > 1000 / this.fps) {
-            this.frameTimer = 0;
+        this.frameTimer += deltaTime;
+        const frameInterval = 1000 / this.fps;
+        if (this.frameTimer >= frameInterval) {
+            this.frameTimer -= frameInterval;
             this.frameX = this.frameX < this.maxFrame ? this.frameX + 1 : 0;
-        } else {
-            this.frameTimer += deltaTime;
         }
     }
 
@@ -194,12 +209,14 @@ export class Enemy {
 
         const screen = camera.worldToScreen(this.x, this.y);
         const s = camera.scale;
-        const dw = this.width * s;
-        const dh = this.height * s;
+        const sx = Math.round(screen.x);
+        const sy = Math.round(screen.y);
+        const dw = Math.round(this.width * s);
+        const dh = Math.round(this.height * s);
 
         ctx.save();
         if (!this.facingRight) {
-            ctx.translate(screen.x + dw, screen.y);
+            ctx.translate(sx + dw, sy);
             ctx.scale(-1, 1);
             ctx.drawImage(
                 img,
@@ -213,7 +230,7 @@ export class Enemy {
                 img,
                 this.frameX * this.spriteWidth, this.frameY * this.spriteHeight,
                 this.spriteWidth, this.spriteHeight,
-                screen.x, screen.y,
+                sx, sy,
                 dw, dh
             );
         }
