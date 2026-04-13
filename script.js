@@ -1000,16 +1000,16 @@ class Game {
     }
 
     async restart() {
-        this.gameOver = false;
-        this.gameOverReason = '';
         this.camera.resetZoom();
         this.door = null;
         this.decorations = [];
         this.enemyManager.clear();
         this.npcManager.clear();
         this.environmentFX.clear();
-        await this.buildProceduralLevel(this.currentLevel);
+        await this.loadLevel(this.currentLevel);
         this.camera.follow(this.player);
+        this.gameOver = false;
+        this.gameOverReason = '';
     }
 }
 

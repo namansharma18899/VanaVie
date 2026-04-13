@@ -281,4 +281,11 @@ export class Enemy {
         const ty = target.y + target.height / 2;
         return Math.hypot(tx - cx, ty - cy);
     }
+
+    /** True when the target is roughly on the same ground level. */
+    isOnSameLevel(target) {
+        const eFeet = this.y + this.height;
+        const tFeet = target.y + target.height;
+        return Math.abs(eFeet - tFeet) < this.height * 1.2;
+    }
 }

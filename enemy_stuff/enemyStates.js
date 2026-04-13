@@ -25,12 +25,13 @@ export class EnemyIdle extends State {
     }
 
     handleInput(player, deltaTime) {
-        if (this.entity.alerted) {
+        const sameLevel = this.entity.isOnSameLevel(player);
+        if (this.entity.alerted && sameLevel) {
             this.entity.setState(EnemyStateEnum.CHASE);
             return;
         }
         const dist = this.entity.distanceTo(player);
-        if (dist < this.entity.detectionRange) {
+        if (dist < this.entity.detectionRange && sameLevel) {
             this.entity.setState(EnemyStateEnum.CHASE);
             return;
         }
@@ -56,12 +57,13 @@ export class EnemyPatrol extends State {
     }
 
     handleInput(player, deltaTime) {
-        if (this.entity.alerted) {
+        const sameLevel = this.entity.isOnSameLevel(player);
+        if (this.entity.alerted && sameLevel) {
             this.entity.setState(EnemyStateEnum.CHASE);
             return;
         }
         const dist = this.entity.distanceTo(player);
-        if (dist < this.entity.detectionRange) {
+        if (dist < this.entity.detectionRange && sameLevel) {
             this.entity.setState(EnemyStateEnum.CHASE);
             return;
         }
@@ -98,6 +100,16 @@ export class EnemyChase extends State {
 
     handleInput(player, _deltaTime) {
         const dist = this.entity.distanceTo(player);
+        const sameLevel = this.entity.isOnSameLevel(player);
+
+        // Player is unreachable (different level) — forget and disengage
+        if (!sameLevel) {
+            this.entity.alerted = false;
+            this.entity.alertTimer = 0;
+            this.entity.setState(EnemyStateEnum.IDLE);
+            return;
+        }
+
         const disengageRange = this.entity.alerted
             ? this.entity.detectionRange * 3
             : this.entity.detectionRange * 2;
@@ -113,12 +125,7 @@ export class EnemyChase extends State {
         this.entity.facingRight = playerCenterX > enemyCenterX;
 
         if (this.entity.isRanged) {
-            const sameLevelThreshold = this.entity.height;
-            const eCenterY = this.entity.y + this.entity.height / 2;
-            const pCenterY = player.y + player.height / 2;
-            const onSameLevel = Math.abs(eCenterY - pCenterY) < sameLevelThreshold;
-
-            if (onSameLevel && dist <= this.entity.projectileRange) {
+            if (dist <= this.entity.projectileRange) {
                 if (this.entity.attackCooldown <= 0) {
                     this.entity.setState(EnemyStateEnum.ATTACK);
                     return;
@@ -220,10 +227,16 @@ export class EnemyHurt extends State {
 
     handleInput(player, _deltaTime) {
         if (this.entity.frameX >= this.entity.maxFrame) {
-            const playerCenterX = player.x + player.width / 2;
-            const enemyCenterX = this.entity.x + this.entity.width / 2;
-            this.entity.facingRight = playerCenterX > enemyCenterX;
-            this.entity.setState(EnemyStateEnum.CHASE);
+            if (this.entity.isOnSameLevel(player)) {
+                const playerCenterX = player.x + player.width / 2;
+                const enemyCenterX = this.entity.x + this.entity.width / 2;
+                this.entity.facingRight = playerCenterX > enemyCenterX;
+                this.entity.setState(EnemyStateEnum.CHASE);
+            } else {
+                this.entity.alerted = false;
+                this.entity.alertTimer = 0;
+                this.entity.setState(EnemyStateEnum.IDLE);
+            }
         }
     }
 }
