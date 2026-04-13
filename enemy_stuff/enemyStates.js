@@ -18,6 +18,7 @@ export class EnemyIdle extends State {
 
     enter() {
         this.entity.setAnimation('idle');
+        this.entity.fps = this.entity.config.animations?.idle?.fps || 8;
         this.entity.vx = 0;
         this.idleTimer = 0;
         this.idleDuration = 600 + Math.random() * 800;
@@ -49,6 +50,7 @@ export class EnemyPatrol extends State {
 
     enter() {
         this.entity.setAnimation('walk');
+        this.entity.fps = this.entity.config.animations?.walk?.fps || 8;
         this.patrolTimer = 0;
         this.patrolDuration = 1500 + Math.random() * 2000;
     }
@@ -90,13 +92,15 @@ export class EnemyChase extends State {
 
     enter() {
         this.entity.setAnimation('walk');
+        const baseFps = this.entity.config.animations?.walk?.fps || 8;
+        this.entity.fps = Math.round(baseFps * 1.5);
     }
 
     handleInput(player, _deltaTime) {
         const dist = this.entity.distanceTo(player);
         const disengageRange = this.entity.alerted
-            ? this.entity.detectionRange * 2
-            : this.entity.detectionRange * 1.2;
+            ? this.entity.detectionRange * 3
+            : this.entity.detectionRange * 2;
 
         if (dist > disengageRange && !this.entity.alerted) {
             this.entity.setState(EnemyStateEnum.IDLE);
@@ -106,6 +110,8 @@ export class EnemyChase extends State {
         const playerCenterX = player.x + player.width / 2;
         const enemyCenterX = this.entity.x + this.entity.width / 2;
 
+        this.entity.facingRight = playerCenterX > enemyCenterX;
+
         if (this.entity.isRanged) {
             const sameLevelThreshold = this.entity.height;
             const eCenterY = this.entity.y + this.entity.height / 2;
@@ -113,7 +119,6 @@ export class EnemyChase extends State {
             const onSameLevel = Math.abs(eCenterY - pCenterY) < sameLevelThreshold;
 
             if (onSameLevel && dist <= this.entity.projectileRange) {
-                this.entity.facingRight = playerCenterX > enemyCenterX;
                 if (this.entity.attackCooldown <= 0) {
                     this.entity.setState(EnemyStateEnum.ATTACK);
                     return;
@@ -128,12 +133,33 @@ export class EnemyChase extends State {
             return;
         }
 
-        if (playerCenterX > enemyCenterX) {
-            this.entity.vx = this.entity.speed;
-            this.entity.facingRight = true;
+        const chaseSpeed = this.entity.speed * 1.1;
+        const mgr = this.entity.game?.enemyManager;
+        const flank = mgr ? mgr.getFlankDirection(this.entity, player) : 0;
+
+        if (flank !== 0 && dist < this.entity.detectionRange && dist > this.entity.attackRange * 2) {
+            this.entity.vx = chaseSpeed * flank;
+        } else if (playerCenterX > enemyCenterX) {
+            this.entity.vx = chaseSpeed;
         } else {
-            this.entity.vx = -this.entity.speed;
-            this.entity.facingRight = false;
+            this.entity.vx = -chaseSpeed;
+        }
+
+        if (this.entity.canJump && this.entity.onGround && this.entity.jumpCooldown <= 0) {
+            const tileMap = this.entity.game?.levelManager?.tileMap;
+            if (tileMap) {
+                const dir = this.entity.facingRight ? 1 : -1;
+                const probeX = this.entity.x + this.entity.width / 2 + dir * (this.entity.width / 2 + 4);
+                const feetY = this.entity.y + this.entity.height - 4;
+                const chestY = this.entity.y + this.entity.height * 0.4;
+
+                const wallAhead = tileMap.isSolid(probeX, chestY);
+                const groundAhead = tileMap.isSolid(probeX, feetY + tileMap.tileHeight);
+
+                if (wallAhead || !groundAhead) {
+                    this.entity.jump();
+                }
+            }
         }
     }
 }
@@ -146,11 +172,16 @@ export class EnemyAttack extends State {
 
     enter() {
         this.entity.setAnimation('attack');
+        this.entity.fps = this.entity.config.animations?.attack?.fps || 10;
         this.entity.vx = 0;
         this.hasDealtDamage = false;
     }
 
     handleInput(player, _deltaTime) {
+        const playerCenterX = player.x + player.width / 2;
+        const enemyCenterX = this.entity.x + this.entity.width / 2;
+        this.entity.facingRight = playerCenterX > enemyCenterX;
+
         const midFrame = Math.floor(this.entity.maxFrame / 2);
         if (!this.hasDealtDamage && this.entity.frameX >= midFrame) {
             if (this.entity.isRanged) {
@@ -167,9 +198,7 @@ export class EnemyAttack extends State {
         if (this.entity.frameX >= this.entity.maxFrame) {
             this.entity.attackCooldown = this.entity.attackCooldownTime;
             const dist = this.entity.distanceTo(player);
-            if (dist <= this.entity.attackRange && this.entity.attackCooldown <= 0) {
-                this.entity.setState(EnemyStateEnum.ATTACK);
-            } else if (dist < this.entity.detectionRange) {
+            if (dist < this.entity.detectionRange * 2) {
                 this.entity.setState(EnemyStateEnum.CHASE);
             } else {
                 this.entity.setState(EnemyStateEnum.IDLE);
@@ -185,11 +214,15 @@ export class EnemyHurt extends State {
 
     enter() {
         this.entity.setAnimation('hurt');
+        this.entity.fps = this.entity.config.animations?.hurt?.fps || 10;
         this.entity.vx = 0;
     }
 
-    handleInput(_player, _deltaTime) {
+    handleInput(player, _deltaTime) {
         if (this.entity.frameX >= this.entity.maxFrame) {
+            const playerCenterX = player.x + player.width / 2;
+            const enemyCenterX = this.entity.x + this.entity.width / 2;
+            this.entity.facingRight = playerCenterX > enemyCenterX;
             this.entity.setState(EnemyStateEnum.CHASE);
         }
     }
@@ -202,6 +235,7 @@ export class EnemyDead extends State {
 
     enter() {
         this.entity.setAnimation('dead');
+        this.entity.fps = this.entity.config.animations?.dead?.fps || 8;
         this.entity.vx = 0;
         this.entity.vy = 0;
     }

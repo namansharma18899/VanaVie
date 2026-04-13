@@ -210,6 +210,10 @@ export class StoryManager {
     isActive() {
         return this.activeDialog !== null;
     }
+
+    isOnCooldown() {
+        return this._cooldown > 0;
+    }
 }
 
 function roundRect(ctx, x, y, w, h, r) {

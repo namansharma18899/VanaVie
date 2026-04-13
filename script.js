@@ -84,7 +84,7 @@ class Game {
         try {
             await this.levelManager.loadLevel(levelName);
         } catch (_e) {
-            this.buildProceduralLevel(levelName);
+            await this.buildProceduralLevel(levelName);
         }
 
         this.camera.follow(this.player);
@@ -131,13 +131,97 @@ class Game {
         await fadeIn();
     }
 
-    buildProceduralLevel(levelName) {
-        switch (levelName) {
-            case 'level1': this._buildLevel1(); break;
-            case 'level2': this._buildLevel2(); break;
-            case 'level3': this._buildLevel3(); break;
-            default: this._buildLevel1(); break;
+    async buildProceduralLevel(levelName) {
+        const resp = await fetch(`maps/custom/${levelName}.json`);
+        if (!resp.ok) throw new Error(`Level ${levelName} not found`);
+        const data = await resp.json();
+        this._buildFromLevelData(data);
+    }
+
+    _buildFromLevelData(data) {
+        const cols = data.cols;
+        const rows = data.rows;
+        const tileSize = data.tileSize || 32;
+        const terrainData = data.terrain.slice();
+
+        const objects = [];
+        const ps = data.playerStart || { col: 2, row: rows - 3 };
+        objects.push({
+            name: 'start', type: 'playerStart',
+            x: ps.col * tileSize, y: ps.row * tileSize,
+            width: tileSize, height: tileSize,
+        });
+
+        if (data.storyTriggers) {
+            for (const st of data.storyTriggers) {
+                objects.push({
+                    name: st.name, type: 'story',
+                    x: st.col * tileSize, y: (st.row != null ? st.row : rows - 4) * tileSize,
+                    width: 96, height: 96,
+                    properties: [
+                        { name: 'text', value: st.text },
+                        { name: 'speaker', value: st.speaker || '' },
+                        { name: 'oneShot', value: st.oneShot !== false },
+                    ],
+                });
+            }
         }
+
+        const groundImage = new Image();
+        groundImage.src = 'assets/backgrounds/layer-5.png';
+
+        const tileMap = this._makeTileMap(cols, rows, tileSize, terrainData, objects, groundImage, data.tileColors);
+        const startX = ps.col * tileSize;
+        const startY = ps.row * tileSize;
+        this._finalizeLevel(tileMap, startX, startY, data.name || 'Untitled');
+
+        this.loadParallax(data.theme || 'forest');
+        this.environmentFX.setPreset(data.fx || 'wind_leaves');
+
+        if (data.enemies) {
+            for (const e of data.enemies) {
+                const groundY = e.row * tileSize;
+                this.enemyManager.spawnManual(e.type, e.col * tileSize, groundY, {
+                    patrolLeft: (e.patrolLeftCol != null ? e.patrolLeftCol : e.col - 5) * tileSize,
+                    patrolRight: (e.patrolRightCol != null ? e.patrolRightCol : e.col + 5) * tileSize,
+                });
+            }
+        }
+
+        if (data.decorations) {
+            this._addDecorations(data.decorations, tileSize, rows);
+        }
+
+        if (data.npcs) {
+            for (const n of data.npcs) {
+                const npcRow = n.row != null ? n.row : rows - 2;
+                const spriteBase = n.sprite === 'Wizard' ? 'Wizard' : 'Swordsman';
+                this.npcManager.spawnManual({
+                    name: n.name || 'NPC',
+                    x: n.col * tileSize,
+                    y: npcRow * tileSize - 128,
+                    spriteSrc: `assets/sprites/Enemy/${spriteBase}/Idle.png`,
+                    spriteWidth: 128, spriteHeight: 128,
+                    drawWidth: 128, drawHeight: 128,
+                    idleFrames: 5,
+                    interactRange: 120,
+                    facingRight: true,
+                    oneShot: false,
+                    cinematicZoom: true,
+                    zoomScale: 1.3,
+                    dialog: { text: n.dialog || '' },
+                });
+            }
+        }
+
+        if (data.door) {
+            const doorCol = data.door.col != null ? data.door.col : cols - 6;
+            const doorRow = data.door.row != null ? data.door.row : null;
+            this.door = this._makeDoor(tileSize, cols, rows, doorCol, doorRow);
+            this.door.nextLevel = data.door.nextLevel || null;
+        }
+
+        this.audio.playMusic('assets/audio/Relaxing_Bagpipe_Harp_Ocarina_Violin_Celtic_Music_48KBPS.mp4', { startTime: data.musicStartTime || 0 });
     }
 
     async loadParallax(theme) {
@@ -203,24 +287,26 @@ class Game {
         this.enemyManager.registerEnemyType('centipede', {
             spriteWidth: 72,
             spriteHeight: 72,
-            drawWidth: 96,
-            drawHeight: 96,
+            drawWidth: 72,
+            drawHeight: 72,
             speed: 2.5,
             health: 20,
             damage: 8,
             detectionRange: 180,
             attackRange: 55,
             attackCooldownTime: 800,
-            hitboxOffsetX: 16,
-            hitboxOffsetY: 24,
-            hitboxWidth: 56,
-            hitboxHeight: 64,
+            hitboxOffsetX: 8,
+            hitboxOffsetY: 12,
+            hitboxWidth: 48,
+            hitboxHeight: 52,
+            canJump: true,
+            jumpForce: -11,
             animations: {
-                idle:   { src: `${centipedePath}/Centipede_idle.png`, frames: 3 },
-                walk:   { src: `${centipedePath}/Centipede_walk.png`, frames: 3 },
-                attack: { src: `${centipedePath}/Centipede_attack2.png`, frames: 5 },
-                hurt:   { src: `${centipedePath}/Centipede_hurt.png`, frames: 1 },
-                dead:   { src: `${centipedePath}/Centipede_death.png`, frames: 3 },
+                idle:   { src: `${centipedePath}/Centipede_idle.png`, frames: 4, fps: 6 },
+                walk:   { src: `${centipedePath}/Centipede_walk.png`, frames: 4, fps: 8 },
+                attack: { src: `${centipedePath}/Centipede_attack2.png`, frames: 6, fps: 10 },
+                hurt:   { src: `${centipedePath}/Centipede_hurt.png`, frames: 2, fps: 8 },
+                dead:   { src: `${centipedePath}/Centipede_death.png`, frames: 4, fps: 6 },
             },
         });
 
@@ -228,18 +314,18 @@ class Game {
         this.enemyManager.registerEnemyType('battle_turtle', {
             spriteWidth: 72,
             spriteHeight: 72,
-            drawWidth: 96,
-            drawHeight: 96,
+            drawWidth: 72,
+            drawHeight: 72,
             speed: 1.5,
             health: 40,
             damage: 12,
             detectionRange: 160,
             attackRange: 60,
             attackCooldownTime: 2000,
-            hitboxOffsetX: 14,
-            hitboxOffsetY: 20,
-            hitboxWidth: 60,
-            hitboxHeight: 68,
+            hitboxOffsetX: 8,
+            hitboxOffsetY: 10,
+            hitboxWidth: 50,
+            hitboxHeight: 54,
             isRanged: true,
             projectileRange: 250,
             projectileConfig: {
@@ -251,11 +337,11 @@ class Game {
                 maxDistance: 300,
             },
             animations: {
-                idle:   { src: `${turtlePath}/Battle_turtle_idle.png`, frames: 3 },
-                walk:   { src: `${turtlePath}/Battle_turtle_walk.png`, frames: 3 },
-                attack: { src: `${turtlePath}/Battle_turtle_attack1.png`, frames: 3 },
-                hurt:   { src: `${turtlePath}/Battle_turtle_hurt.png`, frames: 1 },
-                dead:   { src: `${turtlePath}/Battle_turtle_death.png`, frames: 3 },
+                idle:   { src: `${turtlePath}/Battle_turtle_idle.png`, frames: 4, fps: 5 },
+                walk:   { src: `${turtlePath}/Battle_turtle_walk.png`, frames: 4, fps: 6 },
+                attack: { src: `${turtlePath}/Battle_turtle_attack1.png`, frames: 4, fps: 8 },
+                hurt:   { src: `${turtlePath}/Battle_turtle_hurt.png`, frames: 2, fps: 8 },
+                dead:   { src: `${turtlePath}/Battle_turtle_death.png`, frames: 4, fps: 6 },
             },
         });
 
@@ -263,24 +349,24 @@ class Game {
         this.enemyManager.registerEnemyType('big_bloated', {
             spriteWidth: 72,
             spriteHeight: 72,
-            drawWidth: 112,
-            drawHeight: 112,
+            drawWidth: 144,
+            drawHeight: 144,
             speed: 1.0,
             health: 60,
             damage: 18,
             detectionRange: 200,
             attackRange: 65,
             attackCooldownTime: 1500,
-            hitboxOffsetX: 18,
-            hitboxOffsetY: 24,
-            hitboxWidth: 72,
-            hitboxHeight: 80,
+            hitboxOffsetX: 24,
+            hitboxOffsetY: 32,
+            hitboxWidth: 88,
+            hitboxHeight: 100,
             animations: {
-                idle:   { src: `${bloatedPath}/Big_bloated_idle.png`, frames: 3 },
-                walk:   { src: `${bloatedPath}/Big_bloated_walk.png`, frames: 5 },
-                attack: { src: `${bloatedPath}/Big_bloated_attack1.png`, frames: 5 },
-                hurt:   { src: `${bloatedPath}/Big_bloated_hurt.png`, frames: 1 },
-                dead:   { src: `${bloatedPath}/Big_bloated_death.png`, frames: 3 },
+                idle:   { src: `${bloatedPath}/Big_bloated_idle.png`, frames: 4, fps: 5 },
+                walk:   { src: `${bloatedPath}/Big_bloated_walk.png`, frames: 6, fps: 7 },
+                attack: { src: `${bloatedPath}/Big_bloated_attack1.png`, frames: 6, fps: 9 },
+                hurt:   { src: `${bloatedPath}/Big_bloated_hurt.png`, frames: 2, fps: 8 },
+                dead:   { src: `${bloatedPath}/Big_bloated_death.png`, frames: 4, fps: 5 },
             },
         });
     }
@@ -432,7 +518,7 @@ class Game {
         }
     }
 
-    _makeDoor(tileSize, cols, rows, doorCol) {
+    _makeDoor(tileSize, cols, rows, doorCol, doorRow) {
         const doorBasePath = 'assets/sprites/medivial/Objects/';
         const doorImages = [];
         for (let i = 1; i <= 4; i++) {
@@ -441,10 +527,12 @@ class Game {
             doorImages.push(img);
         }
         const doorW = 64;
-        const doorH = 80;
+        const doorH = 64;
+        const doorPad = 6;
+        const groundRow = doorRow != null ? doorRow : (rows - 2);
         return {
             x: doorCol * tileSize,
-            y: (rows - 2) * tileSize - doorH,
+            y: (groundRow + 1) * tileSize - doorH + doorPad,
             width: doorW,
             height: doorH,
             images: doorImages,
@@ -457,13 +545,30 @@ class Game {
     }
 
     _spawnRandomEnemies(enemyTypes, zones, tileSize, rows) {
+        const MIN_SPACING = 4 * tileSize;
+
         for (const zone of zones) {
             const count = zone.min + Math.floor(Math.random() * (zone.max - zone.min + 1));
             const groundRow = zone.groundRow ?? (rows - 2);
             for (let i = 0; i < count; i++) {
                 const type = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
-                const col = zone.startCol + Math.floor(Math.random() * (zone.endCol - zone.startCol));
-                const x = col * tileSize;
+                let x = null;
+                for (let attempt = 0; attempt < 8; attempt++) {
+                    const col = zone.startCol + Math.floor(Math.random() * (zone.endCol - zone.startCol));
+                    const candidateX = col * tileSize;
+                    let tooClose = false;
+                    for (const existing of this.enemyManager.enemies) {
+                        if (Math.abs(existing.x - candidateX) < MIN_SPACING) {
+                            tooClose = true;
+                            break;
+                        }
+                    }
+                    if (!tooClose) {
+                        x = candidateX;
+                        break;
+                    }
+                }
+                if (x === null) continue;
                 const groundY = groundRow * tileSize;
                 this.enemyManager.spawnManual(type, x, groundY, {
                     patrolLeft: zone.startCol * tileSize,
@@ -474,21 +579,54 @@ class Game {
     }
 
     _addDecorations(positions, tileSize, rows) {
-        const propPaths = [
+        // [width, height, bottomPadding] — padding compensates for transparent pixels inside the sprite
+        const OBJ_INFO = {
+            torch:          [32, 32, 4],
+            barrel:         [32, 32, 2],
+            box:            [32, 32, 3],
+            vase:           [32, 32, 3],
+            chest_closed:   [32, 32, 5],
+            chest_opened:   [32, 32, 5],
+            window_small:   [32, 32, 2],
+            chain1:         [64, 64, 4],
+            chain2:         [64, 64, 4],
+            lever1:         [64, 64, 6],
+            lever2:         [64, 64, 6],
+            shield:         [64, 64, 6],
+            window:         [64, 64, 4],
+            walls1:         [64, 64, 2],
+            walls2:         [64, 64, 2],
+            stairs_full:    [128, 128, 2],
+        };
+        const fallbackPaths = [
             'assets/sprites/medivial/Objects/barrel.png',
             'assets/sprites/medivial/Objects/box.png',
             'assets/sprites/medivial/Objects/vase.png',
         ];
         for (const pos of positions) {
-            const src = propPaths[Math.floor(Math.random() * propPaths.length)];
+            const objType = pos.objectType || null;
+            let src, w, h, pad;
+            if (objType && OBJ_INFO[objType]) {
+                src = 'assets/sprites/medivial/Objects/' + objType + '.png';
+                w = OBJ_INFO[objType][0];
+                h = OBJ_INFO[objType][1];
+                pad = OBJ_INFO[objType][2];
+            } else {
+                src = fallbackPaths[Math.floor(Math.random() * fallbackPaths.length)];
+                w = 32;
+                h = 32;
+                pad = 2;
+            }
             const img = new Image();
             img.src = src;
+            const posRow = pos.row ?? (rows - 2);
             this.decorations.push({
                 image: img,
+                objectType: objType,
                 x: pos.col * tileSize,
-                y: (pos.row ?? (rows - 2)) * tileSize - 32,
-                width: 32,
-                height: 32,
+                y: (posRow + 1) * tileSize - h + pad,
+                width: w,
+                height: h,
             });
         }
     }
@@ -508,356 +646,6 @@ class Game {
             }
         }
         this.levelManager.currentLevelName = levelName;
-    }
-
-    // ─── Level 1: The Verdant Path (forest) ────────────────────────────
-
-    _buildLevel1() {
-        const cols = 130, rows = 17, tileSize = 32;
-        const terrainData = new Array(cols * rows).fill(0);
-
-        for (let r = 0; r < rows; r++) this._setTile(terrainData, cols, rows, r, 0, 1);
-        for (let r = 0; r < rows; r++) this._setTile(terrainData, cols, rows, r, cols - 1, 1);
-
-        this._fillGround(terrainData, cols, rows, 1, 20, rows - 2);
-        this._fillGround(terrainData, cols, rows, 23, 44, rows - 2);
-        this._fillGround(terrainData, cols, rows, 47, 70, rows - 2);
-        this._fillGround(terrainData, cols, rows, 73, 100, rows - 2);
-        this._fillGround(terrainData, cols, rows, 103, cols - 1, rows - 2);
-
-        // stepping stone over first gap
-        for (let c = 21; c < 23; c++) this._setTile(terrainData, cols, rows, rows - 3, c, 3);
-
-        // platforms in zone 2
-        for (let c = 28; c < 32; c++) this._setTile(terrainData, cols, rows, rows - 5, c, 3);
-        for (let c = 36; c < 39; c++) this._setTile(terrainData, cols, rows, rows - 4, c, 3);
-
-        // stepping stones over second gap
-        this._setTile(terrainData, cols, rows, rows - 3, 45, 3);
-        this._setTile(terrainData, cols, rows, rows - 4, 46, 3);
-
-        // platforms in zone 3
-        for (let c = 55; c < 59; c++) this._setTile(terrainData, cols, rows, rows - 5, c, 3);
-        for (let c = 62; c < 65; c++) this._setTile(terrainData, cols, rows, rows - 6, c, 3);
-
-        // narrow ledge over third gap
-        for (let c = 71; c < 73; c++) this._setTile(terrainData, cols, rows, rows - 3, c, 3);
-
-        // platforms in zone 4
-        for (let c = 80; c < 83; c++) this._setTile(terrainData, cols, rows, rows - 4, c, 3);
-        for (let c = 88; c < 92; c++) this._setTile(terrainData, cols, rows, rows - 5, c, 3);
-        for (let c = 94; c < 97; c++) this._setTile(terrainData, cols, rows, rows - 6, c, 3);
-
-        // stepping stones over fourth gap
-        this._setTile(terrainData, cols, rows, rows - 3, 101, 3);
-        this._setTile(terrainData, cols, rows, rows - 4, 102, 3);
-
-        // platforms in zone 5
-        for (let c = 110; c < 114; c++) this._setTile(terrainData, cols, rows, rows - 5, c, 3);
-
-        const groundImage = new Image();
-        groundImage.src = 'assets/backgrounds/layer-5.png';
-
-        const objects = [
-            { name: 'start', type: 'playerStart', x: 64, y: (rows - 3) * tileSize, width: 32, height: 32 },
-            {
-                name: 'tutorial_move', type: 'story',
-                x: 3 * tileSize, y: (rows - 4) * tileSize, width: 96, height: 96,
-                properties: [
-                    { name: 'text', value: 'Use W A S D to move around.|Press W to jump over gaps.' },
-                    { name: 'speaker', value: 'Tutorial' },
-                    { name: 'oneShot', value: true },
-                ],
-            },
-            {
-                name: 'tutorial_attack', type: 'story',
-                x: 18 * tileSize, y: (rows - 4) * tileSize, width: 96, height: 96,
-                properties: [
-                    { name: 'text', value: 'Press SPACE to attack enemies.|Time your shots carefully!' },
-                    { name: 'speaker', value: 'Tutorial' },
-                    { name: 'oneShot', value: true },
-                ],
-            },
-            {
-                name: 'tutorial_gap', type: 'story',
-                x: 43 * tileSize, y: (rows - 4) * tileSize, width: 96, height: 96,
-                properties: [
-                    { name: 'text', value: 'Watch out for gaps!|Falling means instant death.|Run and jump to cross wider ones.' },
-                    { name: 'speaker', value: 'Tutorial' },
-                    { name: 'oneShot', value: true },
-                ],
-            },
-            {
-                name: 'tutorial_door', type: 'story',
-                x: 100 * tileSize, y: (rows - 4) * tileSize, width: 96, height: 96,
-                properties: [
-                    { name: 'text', value: 'Press E near doors to enter them.|The door ahead leads to new lands.' },
-                    { name: 'speaker', value: 'Tutorial' },
-                    { name: 'oneShot', value: true },
-                ],
-            },
-        ];
-
-        const tileMap = this._makeTileMap(cols, rows, tileSize, terrainData, objects, groundImage);
-        this._finalizeLevel(tileMap, 64, (rows - 3) * tileSize, 'The Verdant Path');
-
-        this.loadParallax('forest');
-        this.environmentFX.setPreset('wind_leaves');
-
-        // Random enemies
-        this._spawnRandomEnemies(['centipede'], [
-            { startCol: 25, endCol: 42, min: 1, max: 2 },
-            { startCol: 50, endCol: 68, min: 2, max: 3 },
-            { startCol: 75, endCol: 98, min: 2, max: 3 },
-            { startCol: 105, endCol: 120, min: 1, max: 2 },
-        ], tileSize, rows);
-
-        this._addDecorations([
-            { col: 5 }, { col: 15 }, { col: 35 }, { col: 52 },
-            { col: 78 }, { col: 95 }, { col: 115 },
-        ], tileSize, rows);
-
-        this.door = this._makeDoor(tileSize, cols, rows, cols - 6);
-        this.door.nextLevel = 'level2';
-
-        this.audio.playMusic('assets/audio/Relaxing_Bagpipe_Harp_Ocarina_Violin_Celtic_Music_48KBPS.mp4', { startTime: 50 });
-    }
-
-    // ─── Level 2: The Barren Crossing (desert) ─────────────────────────
-
-    _buildLevel2() {
-        const cols = 140, rows = 17, tileSize = 32;
-        const terrainData = new Array(cols * rows).fill(0);
-
-        for (let r = 0; r < rows; r++) this._setTile(terrainData, cols, rows, r, 0, 1);
-        for (let r = 0; r < rows; r++) this._setTile(terrainData, cols, rows, r, cols - 1, 1);
-
-        // Wider gaps, more height variation
-        this._fillGround(terrainData, cols, rows, 1, 16, rows - 2);
-        // gap of 5 tiles
-        this._fillGround(terrainData, cols, rows, 21, 38, rows - 2);
-        // gap of 4 tiles with stepping stone
-        this._setTile(terrainData, cols, rows, rows - 4, 39, 3);
-        this._setTile(terrainData, cols, rows, rows - 5, 40, 3);
-        this._fillGround(terrainData, cols, rows, 42, 55, rows - 2);
-        // large gap of 6 tiles
-        this._fillGround(terrainData, cols, rows, 61, 78, rows - 2);
-        // staircase up
-        for (let c = 78; c < 80; c++) this._setTile(terrainData, cols, rows, rows - 3, c, 3);
-        for (let c = 80; c < 82; c++) this._setTile(terrainData, cols, rows, rows - 4, c, 3);
-        for (let c = 82; c < 84; c++) this._setTile(terrainData, cols, rows, rows - 5, c, 3);
-        // elevated ground section
-        this._fillGround(terrainData, cols, rows, 85, 100, rows - 4);
-        // drop down
-        for (let c = 100; c < 102; c++) this._setTile(terrainData, cols, rows, rows - 3, c, 3);
-        this._fillGround(terrainData, cols, rows, 103, 115, rows - 2);
-        // narrow bridges over gap
-        this._setTile(terrainData, cols, rows, rows - 3, 116, 3);
-        // gap
-        this._setTile(terrainData, cols, rows, rows - 4, 118, 3);
-        // gap
-        this._setTile(terrainData, cols, rows, rows - 3, 120, 3);
-        this._fillGround(terrainData, cols, rows, 122, cols - 1, rows - 2);
-
-        // platforms in earlier sections
-        for (let c = 26; c < 30; c++) this._setTile(terrainData, cols, rows, rows - 5, c, 3);
-        for (let c = 32; c < 35; c++) this._setTile(terrainData, cols, rows, rows - 6, c, 3);
-        for (let c = 48; c < 52; c++) this._setTile(terrainData, cols, rows, rows - 5, c, 3);
-        for (let c = 66; c < 69; c++) this._setTile(terrainData, cols, rows, rows - 5, c, 3);
-        for (let c = 72; c < 75; c++) this._setTile(terrainData, cols, rows, rows - 6, c, 3);
-        for (let c = 90; c < 93; c++) this._setTile(terrainData, cols, rows, rows - 7, c, 3);
-        for (let c = 128; c < 132; c++) this._setTile(terrainData, cols, rows, rows - 4, c, 3);
-
-        const groundImage = new Image();
-        groundImage.src = 'assets/backgrounds/layer-5.png';
-
-        const objects = [
-            { name: 'start', type: 'playerStart', x: 64, y: (rows - 3) * tileSize, width: 32, height: 32 },
-        ];
-
-        const tileColors = {
-            grass: '#a08860',
-            grassTop: '#c0a870',
-            dirt: '#8a7050',
-            dirtAccent: '#6a5540',
-            platform: '#7a6a50',
-        };
-
-        const tileMap = this._makeTileMap(cols, rows, tileSize, terrainData, objects, groundImage, tileColors);
-        this._finalizeLevel(tileMap, 64, (rows - 3) * tileSize, 'The Barren Crossing');
-
-        this.loadParallax('desert');
-        this.environmentFX.setPreset('wind_dust');
-
-        // NPC: Swordsman warrior
-        this.npcManager.spawnManual({
-            name: 'Kael',
-            x: 8 * tileSize,
-            y: (rows - 2) * tileSize - 128,
-            spriteSrc: 'assets/sprites/Enemy/Swordsman/Idle.png',
-            spriteWidth: 128,
-            spriteHeight: 128,
-            drawWidth: 128,
-            drawHeight: 128,
-            idleFrames: 5,
-            interactRange: 120,
-            facingRight: true,
-            oneShot: false,
-            cinematicZoom: true,
-            zoomScale: 1.3,
-            dialog: {
-                text: 'Kael: You made it through the forest. Impressive.|' +
-                      'Kael: This desert is unforgiving. The gaps are wider here.|' +
-                      'Kael: The turtles... they are slow but their shells are tough.|' +
-                      'Kael: Past this wasteland lies the Dark Hollow. Steel yourself.',
-            },
-        });
-
-        // Mixed enemies: turtles + centipedes
-        this._spawnRandomEnemies(['battle_turtle', 'centipede'], [
-            { startCol: 23, endCol: 36, min: 1, max: 2 },
-            { startCol: 44, endCol: 53, min: 2, max: 3 },
-            { startCol: 63, endCol: 76, min: 2, max: 3 },
-            { startCol: 87, endCol: 98, min: 1, max: 2, groundRow: rows - 4 },
-            { startCol: 105, endCol: 113, min: 1, max: 2 },
-            { startCol: 124, endCol: 135, min: 2, max: 3 },
-        ], tileSize, rows);
-
-        this._addDecorations([
-            { col: 4 }, { col: 12 }, { col: 30 }, { col: 50 },
-            { col: 70 }, { col: 108 }, { col: 130 },
-        ], tileSize, rows);
-
-        this.door = this._makeDoor(tileSize, cols, rows, cols - 6);
-        this.door.nextLevel = 'level3';
-
-        this.audio.playMusic('assets/audio/Relaxing_Bagpipe_Harp_Ocarina_Violin_Celtic_Music_48KBPS.mp4', { startTime: 120 });
-    }
-
-    // ─── Level 3: The Dark Hollow ───────────────────────────────────────
-
-    _buildLevel3() {
-        const cols = 150, rows = 17, tileSize = 32;
-        const terrainData = new Array(cols * rows).fill(0);
-
-        for (let r = 0; r < rows; r++) this._setTile(terrainData, cols, rows, r, 0, 1);
-        for (let r = 0; r < rows; r++) this._setTile(terrainData, cols, rows, r, cols - 1, 1);
-
-        // Dense, challenging terrain
-        this._fillGround(terrainData, cols, rows, 1, 14, rows - 2);
-        // narrow ledge
-        for (let c = 15; c < 17; c++) this._setTile(terrainData, cols, rows, rows - 3, c, 3);
-        // single stepping stone
-        this._setTile(terrainData, cols, rows, rows - 4, 18, 3);
-        // narrow platform
-        for (let c = 20; c < 22; c++) this._setTile(terrainData, cols, rows, rows - 5, c, 3);
-        this._fillGround(terrainData, cols, rows, 24, 40, rows - 2);
-
-        // ascending staircase section
-        for (let c = 40; c < 42; c++) this._setTile(terrainData, cols, rows, rows - 3, c, 3);
-        for (let c = 43; c < 45; c++) this._setTile(terrainData, cols, rows, rows - 4, c, 3);
-        for (let c = 46; c < 48; c++) this._setTile(terrainData, cols, rows, rows - 5, c, 3);
-        for (let c = 49; c < 51; c++) this._setTile(terrainData, cols, rows, rows - 6, c, 3);
-
-        // elevated section
-        this._fillGround(terrainData, cols, rows, 52, 68, rows - 4);
-
-        // descending staircase
-        for (let c = 68; c < 70; c++) this._setTile(terrainData, cols, rows, rows - 5, c, 3);
-        for (let c = 71; c < 73; c++) this._setTile(terrainData, cols, rows, rows - 4, c, 3);
-        for (let c = 74; c < 76; c++) this._setTile(terrainData, cols, rows, rows - 3, c, 3);
-
-        this._fillGround(terrainData, cols, rows, 78, 90, rows - 2);
-
-        // gauntlet: alternating single-tile jumps
-        this._setTile(terrainData, cols, rows, rows - 3, 91, 3);
-        this._setTile(terrainData, cols, rows, rows - 4, 93, 3);
-        this._setTile(terrainData, cols, rows, rows - 3, 95, 3);
-        this._setTile(terrainData, cols, rows, rows - 5, 97, 3);
-        this._setTile(terrainData, cols, rows, rows - 4, 99, 3);
-        this._setTile(terrainData, cols, rows, rows - 3, 101, 3);
-
-        this._fillGround(terrainData, cols, rows, 103, 118, rows - 2);
-
-        // elevated platforms
-        for (let c = 108; c < 112; c++) this._setTile(terrainData, cols, rows, rows - 5, c, 3);
-        for (let c = 113; c < 116; c++) this._setTile(terrainData, cols, rows, rows - 7, c, 3);
-
-        // final gap gauntlet
-        for (let c = 119; c < 121; c++) this._setTile(terrainData, cols, rows, rows - 3, c, 3);
-        this._setTile(terrainData, cols, rows, rows - 4, 122, 3);
-        for (let c = 124; c < 126; c++) this._setTile(terrainData, cols, rows, rows - 3, c, 3);
-
-        this._fillGround(terrainData, cols, rows, 128, cols - 1, rows - 2);
-
-        // platforms in final section
-        for (let c = 135; c < 139; c++) this._setTile(terrainData, cols, rows, rows - 5, c, 3);
-        for (let c = 140; c < 143; c++) this._setTile(terrainData, cols, rows, rows - 4, c, 3);
-
-        const groundImage = new Image();
-        groundImage.src = 'assets/backgrounds/layer-5.png';
-
-        const objects = [
-            { name: 'start', type: 'playerStart', x: 64, y: (rows - 3) * tileSize, width: 32, height: 32 },
-        ];
-
-        const tileColors = {
-            grass: '#3a5a3a',
-            grassTop: '#4a6a4a',
-            dirt: '#2e3e2e',
-            dirtAccent: '#1e2e1e',
-            platform: '#4a4a5a',
-        };
-
-        const tileMap = this._makeTileMap(cols, rows, tileSize, terrainData, objects, groundImage, tileColors);
-        this._finalizeLevel(tileMap, 64, (rows - 3) * tileSize, 'The Dark Hollow');
-
-        this.loadParallax('dark');
-        this.environmentFX.setPreset('fireflies');
-
-        // NPC: Mysterious figure
-        this.npcManager.spawnManual({
-            name: 'The Watcher',
-            x: 6 * tileSize,
-            y: (rows - 2) * tileSize - 128,
-            spriteSrc: 'assets/sprites/Enemy/Wizard/Idle.png',
-            spriteWidth: 128,
-            spriteHeight: 128,
-            drawWidth: 128,
-            drawHeight: 128,
-            idleFrames: 5,
-            interactRange: 120,
-            facingRight: true,
-            oneShot: false,
-            cinematicZoom: true,
-            zoomScale: 1.35,
-            dialog: {
-                text: 'The Watcher: So you have come this far...|' +
-                      'The Watcher: Few survive the Dark Hollow.|' +
-                      'The Watcher: The creatures here are ancient and terrible.|' +
-                      'The Watcher: Beyond the final door lies your destiny.|' +
-                      'The Watcher: Go now. And do not look back.',
-            },
-        });
-
-        // Hard enemies: big bloated + mixed
-        this._spawnRandomEnemies(['big_bloated', 'battle_turtle', 'centipede'], [
-            { startCol: 26, endCol: 38, min: 2, max: 3 },
-            { startCol: 54, endCol: 66, min: 2, max: 4, groundRow: rows - 4 },
-            { startCol: 80, endCol: 88, min: 2, max: 3 },
-            { startCol: 105, endCol: 116, min: 2, max: 3 },
-            { startCol: 130, endCol: 145, min: 3, max: 5 },
-        ], tileSize, rows);
-
-        this._addDecorations([
-            { col: 4 }, { col: 10 }, { col: 30 }, { col: 60 },
-            { col: 82 }, { col: 110 }, { col: 133 }, { col: 142 },
-        ], tileSize, rows);
-
-        this.door = this._makeDoor(tileSize, cols, rows, cols - 6);
-        this.door.nextLevel = null; // final level
-
-        this.audio.playMusic('assets/audio/Relaxing_Bagpipe_Harp_Ocarina_Violin_Celtic_Music_48KBPS.mp4', { startTime: 200 });
     }
 
     // ─── Update ─────────────────────────────────────────────────────────
@@ -996,6 +784,7 @@ class Game {
 
     draw(ctx) {
         ctx.clearRect(0, 0, this.width, this.height);
+        ctx.imageSmoothingEnabled = false;
 
         ctx.fillStyle = '#0e1a0e';
         ctx.fillRect(0, 0, this.width, this.height);
@@ -1066,13 +855,40 @@ class Game {
     }
 
     drawDecorations(ctx) {
+        const now = performance.now();
         for (const dec of this.decorations) {
             if (!this.camera.isVisible(dec.x, dec.y, dec.width, dec.height)) continue;
             const img = dec.image;
             if (!img?.complete || !img.naturalWidth) continue;
             const screen = this.camera.worldToScreen(dec.x, dec.y);
             const s = this.camera.scale;
-            ctx.drawImage(img, screen.x, screen.y, dec.width * s, dec.height * s);
+            const dw = dec.width * s;
+            const dh = dec.height * s;
+
+            ctx.save();
+            if (dec.objectType === 'torch') {
+                const flicker = 0.7 + 0.3 * Math.sin(now * 0.006 + dec.x);
+                const glowR = 40 * s * flicker;
+                const cx = screen.x + dw / 2;
+                const cy = screen.y + dh * 0.25;
+                const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, glowR);
+                grd.addColorStop(0, `rgba(255,150,30,${0.25 * flicker})`);
+                grd.addColorStop(0.5, `rgba(255,100,0,${0.1 * flicker})`);
+                grd.addColorStop(1, 'rgba(255,80,0,0)');
+                ctx.fillStyle = grd;
+                ctx.fillRect(cx - glowR, cy - glowR, glowR * 2, glowR * 2);
+            }
+
+            if (dec.objectType === 'chain1' || dec.objectType === 'chain2') {
+                const sway = Math.sin(now * 0.002 + dec.x * 0.1) * 2;
+                const pivotX = screen.x + dw / 2;
+                ctx.translate(pivotX, screen.y);
+                ctx.rotate(sway * Math.PI / 180);
+                ctx.translate(-pivotX, -screen.y);
+            }
+
+            ctx.drawImage(img, screen.x, screen.y, dw, dh);
+            ctx.restore();
         }
     }
 
@@ -1183,11 +999,17 @@ class Game {
         ctx.fillText(`level: ${this.levelManager.currentLevelName}`, 20, this.height - 4);
     }
 
-    restart() {
+    async restart() {
         this.gameOver = false;
         this.gameOverReason = '';
         this.camera.resetZoom();
-        this.buildProceduralLevel(this.currentLevel);
+        this.door = null;
+        this.decorations = [];
+        this.enemyManager.clear();
+        this.npcManager.clear();
+        this.environmentFX.clear();
+        await this.buildProceduralLevel(this.currentLevel);
+        this.camera.follow(this.player);
     }
 }
 

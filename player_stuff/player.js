@@ -105,7 +105,8 @@ export class Player {
         const anim = this.config.animations?.[animName];
         if (!anim) return;
         this.frameX = 0;
-        this.maxFrame = anim.frames ?? 3;
+        this.maxFrame = (anim.frames ?? 4) - 1;
+        this.frameTimer = 0;
         if (this.animationImages[animName]) {
             this.activeImage = this.animationImages[animName];
             this.frameY = 0;
@@ -143,11 +144,11 @@ export class Player {
     }
 
     advanceFrame(deltaTime) {
-        if (this.frameTimer > 1000 / this.fps) {
-            this.frameTimer = 0;
+        this.frameTimer += deltaTime;
+        const frameInterval = 1000 / this.fps;
+        if (this.frameTimer >= frameInterval) {
+            this.frameTimer -= frameInterval;
             this.frameX = this.frameX < this.maxFrame ? this.frameX + 1 : 0;
-        } else {
-            this.frameTimer += deltaTime;
         }
     }
 
@@ -159,12 +160,14 @@ export class Player {
 
         const screen = camera.worldToScreen(this.x, this.y);
         const s = camera.scale;
-        const dw = this.width * s;
-        const dh = this.height * s;
+        const sx = Math.round(screen.x);
+        const sy = Math.round(screen.y);
+        const dw = Math.round(this.width * s);
+        const dh = Math.round(this.height * s);
 
         ctx.save();
         if (!this.facingRight) {
-            ctx.translate(screen.x + dw, screen.y);
+            ctx.translate(sx + dw, sy);
             ctx.scale(-1, 1);
             ctx.drawImage(
                 img,
@@ -178,7 +181,7 @@ export class Player {
                 img,
                 this.frameX * this.spriteWidth, this.frameY * this.spriteHeight,
                 this.spriteWidth, this.spriteHeight,
-                screen.x, screen.y,
+                sx, sy,
                 dw, dh
             );
         }

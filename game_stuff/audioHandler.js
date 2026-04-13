@@ -88,20 +88,27 @@ export class AudioManager {
             this.music.pause();
             this.music.currentTime = 0;
         }
-        this.music = new Audio(src);
-        this.music.loop = true;
-        this.music.volume = this.musicVolume;
+        const track = new Audio(src);
+        this.music = track;
+        track.volume = this.musicVolume;
         this.musicStartTime = startTime;
+
         if (startTime > 0) {
-            this.music.currentTime = startTime;
-            this.music.addEventListener('timeupdate', () => {
-                if (this.music && this.music.currentTime < startTime) {
-                    this.music.currentTime = startTime;
-                }
+            track.loop = false;
+            track.addEventListener('loadedmetadata', () => {
+                track.currentTime = startTime;
+            }, { once: true });
+            track.addEventListener('ended', () => {
+                if (this.music !== track) return;
+                track.currentTime = startTime;
+                track.play().catch(() => {});
             });
+        } else {
+            track.loop = true;
         }
+
         if (!this.muted) {
-            this.music.play().catch(() => {});
+            track.play().catch(() => {});
         }
     }
 
@@ -113,20 +120,26 @@ export class AudioManager {
             this._crossfadeDuration = duration;
         }
 
-        this.music = new Audio(src);
-        this.music.loop = true;
-        this.music.volume = 0;
+        const track = new Audio(src);
+        this.music = track;
+        track.volume = 0;
+
         if (startTime > 0) {
-            this.music.currentTime = startTime;
-            const st = startTime;
-            this.music.addEventListener('timeupdate', () => {
-                if (this.music && this.music.currentTime < st) {
-                    this.music.currentTime = st;
-                }
+            track.loop = false;
+            track.addEventListener('loadedmetadata', () => {
+                track.currentTime = startTime;
+            }, { once: true });
+            track.addEventListener('ended', () => {
+                if (this.music !== track) return;
+                track.currentTime = startTime;
+                track.play().catch(() => {});
             });
+        } else {
+            track.loop = true;
         }
+
         if (!this.muted) {
-            this.music.play().catch(() => {});
+            track.play().catch(() => {});
         }
     }
 

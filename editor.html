@@ -1,0 +1,1253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VanaVie - Level Editor</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background: #0a0a12;
+            color: #e0d8c8;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        /* ─── Top Toolbar ────────────────────────────────────── */
+
+        .toolbar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 16px;
+            background: #12121e;
+            border-bottom: 1px solid rgba(204,170,85,0.15);
+            flex-shrink: 0;
+            flex-wrap: wrap;
+        }
+
+        .toolbar label {
+            font-size: 0.72rem;
+            color: #887755;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        .toolbar input, .toolbar select {
+            background: #1a1a2a;
+            border: 1px solid rgba(204,170,85,0.25);
+            color: #e0d8c8;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 0.8rem;
+            font-family: inherit;
+        }
+
+        .toolbar input:focus, .toolbar select:focus {
+            outline: none;
+            border-color: #ccaa55;
+        }
+
+        .toolbar .group {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .toolbar .sep {
+            width: 1px;
+            height: 24px;
+            background: rgba(204,170,85,0.15);
+            margin: 0 4px;
+        }
+
+        /* ─── Main Layout ────────────────────────────────────── */
+
+        .main {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* ─── Left Palette ────────────────────────────────────── */
+
+        .palette {
+            width: 180px;
+            background: #12121e;
+            border-right: 1px solid rgba(204,170,85,0.15);
+            padding: 12px 8px;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+
+        .palette h3 {
+            font-size: 0.65rem;
+            color: #887755;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            margin-bottom: 6px;
+            margin-top: 12px;
+        }
+
+        .palette h3:first-child { margin-top: 0; }
+
+        .palette .tool-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            padding: 6px 10px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid transparent;
+            border-radius: 6px;
+            color: #c0b8a8;
+            font-size: 0.78rem;
+            cursor: pointer;
+            transition: all 0.15s;
+            margin-bottom: 3px;
+            font-family: inherit;
+            text-align: left;
+        }
+
+        .palette .tool-btn:hover {
+            background: rgba(204,170,85,0.08);
+            border-color: rgba(204,170,85,0.15);
+        }
+
+        .palette .tool-btn.active {
+            background: rgba(204,170,85,0.15);
+            border-color: #ccaa55;
+            color: #ccaa55;
+        }
+
+        .palette .tool-btn .swatch {
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+            border: 1px solid rgba(255,255,255,0.1);
+            flex-shrink: 0;
+        }
+
+        .palette .tool-btn .icon {
+            width: 16px;
+            height: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.72rem;
+            flex-shrink: 0;
+        }
+
+        /* ─── Canvas Area ────────────────────────────────────── */
+
+        .canvas-wrap {
+            flex: 1;
+            overflow: auto;
+            position: relative;
+            background: #080810;
+        }
+
+        #editorCanvas {
+            display: block;
+            image-rendering: pixelated;
+        }
+
+        /* ─── Bottom Bar ─────────────────────────────────────── */
+
+        .bottombar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 6px 16px;
+            background: #12121e;
+            border-top: 1px solid rgba(204,170,85,0.15);
+            flex-shrink: 0;
+            font-size: 0.75rem;
+        }
+
+        .bottombar .info {
+            color: #887755;
+            flex: 1;
+        }
+
+        .bottombar button, .toolbar button {
+            background: rgba(204,170,85,0.12);
+            border: 1px solid rgba(204,170,85,0.3);
+            color: #ccaa55;
+            border-radius: 4px;
+            padding: 5px 14px;
+            font-size: 0.78rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+
+        .bottombar button:hover, .toolbar button:hover {
+            background: rgba(204,170,85,0.25);
+            border-color: #ccaa55;
+        }
+
+        /* ─── Modals ─────────────────────────────────────── */
+
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.7);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+        }
+
+        .modal-overlay.visible { display: flex; }
+
+        .modal {
+            background: #1a1a2a;
+            border: 1px solid rgba(204,170,85,0.3);
+            border-radius: 10px;
+            padding: 24px;
+            min-width: 340px;
+            max-width: 460px;
+        }
+
+        .modal h2 {
+            font-size: 1rem;
+            color: #ccaa55;
+            margin-bottom: 16px;
+            letter-spacing: 0.05em;
+        }
+
+        .modal .field {
+            margin-bottom: 12px;
+        }
+
+        .modal .field label {
+            display: block;
+            font-size: 0.72rem;
+            color: #887755;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 4px;
+        }
+
+        .modal .field input, .modal .field textarea, .modal .field select {
+            width: 100%;
+            background: #12121e;
+            border: 1px solid rgba(204,170,85,0.25);
+            color: #e0d8c8;
+            border-radius: 4px;
+            padding: 6px 10px;
+            font-size: 0.82rem;
+            font-family: inherit;
+        }
+
+        .modal .field textarea {
+            resize: vertical;
+            min-height: 60px;
+        }
+
+        .modal .field input:focus, .modal .field textarea:focus, .modal .field select:focus {
+            outline: none;
+            border-color: #ccaa55;
+        }
+
+        .modal .field .checkbox-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .modal .field .checkbox-row input[type=checkbox] {
+            width: auto;
+        }
+
+        .modal .actions {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+            margin-top: 18px;
+        }
+
+        .modal .actions button {
+            background: rgba(204,170,85,0.12);
+            border: 1px solid rgba(204,170,85,0.3);
+            color: #ccaa55;
+            border-radius: 4px;
+            padding: 6px 18px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+
+        .modal .actions button:hover {
+            background: rgba(204,170,85,0.25);
+        }
+
+        .modal .actions button.primary {
+            background: rgba(204,170,85,0.3);
+            border-color: #ccaa55;
+        }
+
+        /* ─── Back Link ─────────────────────────────────────── */
+
+        .back-link {
+            color: #887755;
+            text-decoration: none;
+            font-size: 0.78rem;
+            letter-spacing: 0.05em;
+            transition: color 0.2s;
+        }
+
+        .back-link:hover { color: #ccaa55; }
+    </style>
+</head>
+<body>
+
+<!-- ─── Top Toolbar ──────────────────────────────────────────── -->
+<div class="toolbar">
+    <a href="start.html" class="back-link">&larr; GAME</a>
+    <div class="sep"></div>
+    <div class="group">
+        <label>Name</label>
+        <input type="text" id="levelName" value="My Level" style="width:140px">
+    </div>
+    <div class="group">
+        <label>Cols</label>
+        <input type="number" id="colsInput" value="130" min="20" max="300" style="width:56px">
+    </div>
+    <div class="group">
+        <label>Rows</label>
+        <input type="number" id="rowsInput" value="17" min="8" max="30" style="width:56px">
+    </div>
+    <div class="sep"></div>
+    <div class="group">
+        <label>Theme</label>
+        <select id="themeSelect">
+            <option value="forest">Forest</option>
+            <option value="desert">Desert</option>
+            <option value="dark">Dark</option>
+        </select>
+    </div>
+    <div class="group">
+        <label>FX</label>
+        <select id="fxSelect">
+            <option value="wind_leaves">Wind &amp; Leaves</option>
+            <option value="wind_dust">Wind &amp; Dust</option>
+            <option value="fireflies">Fireflies</option>
+        </select>
+    </div>
+    <div class="group">
+        <label>Music Start</label>
+        <input type="number" id="musicStart" value="50" min="0" style="width:56px">
+    </div>
+    <div class="sep"></div>
+    <button id="resizeBtn">Resize Grid</button>
+</div>
+
+<!-- ─── Main Layout ──────────────────────────────────────────── -->
+<div class="main">
+
+    <!-- Left Palette -->
+    <div class="palette">
+        <h3>Terrain</h3>
+        <button class="tool-btn active" data-tool="ground">
+            <span class="swatch" style="background:#4a7a3a"></span> Ground
+        </button>
+        <button class="tool-btn" data-tool="platform">
+            <span class="swatch" style="background:#6a6a7a"></span> Platform
+        </button>
+        <button class="tool-btn" data-tool="erase">
+            <span class="swatch" style="background:#222"></span> Erase
+        </button>
+
+        <h3>Entities</h3>
+        <button class="tool-btn" data-tool="playerStart">
+            <span class="icon" style="color:#55ccff">P</span> Player Start
+        </button>
+        <button class="tool-btn" data-tool="door">
+            <span class="icon" style="color:#ffaa33">D</span> Door
+        </button>
+        <button class="tool-btn" data-tool="centipede">
+            <span class="icon" style="color:#cc5555">C</span> Centipede
+        </button>
+        <button class="tool-btn" data-tool="battle_turtle">
+            <span class="icon" style="color:#55aa55">T</span> Battle Turtle
+        </button>
+        <button class="tool-btn" data-tool="big_bloated">
+            <span class="icon" style="color:#aa55cc">B</span> Big Bloated
+        </button>
+
+        <h3>Objects</h3>
+        <button class="tool-btn" data-tool="obj_torch">
+            <span class="icon" style="color:#ff8833">&#9632;</span> Torch
+        </button>
+        <button class="tool-btn" data-tool="obj_barrel">
+            <span class="icon" style="color:#aa7744">&#9632;</span> Barrel
+        </button>
+        <button class="tool-btn" data-tool="obj_box">
+            <span class="icon" style="color:#997755">&#9632;</span> Box
+        </button>
+        <button class="tool-btn" data-tool="obj_vase">
+            <span class="icon" style="color:#88aa66">&#9632;</span> Vase
+        </button>
+        <button class="tool-btn" data-tool="obj_chest_closed">
+            <span class="icon" style="color:#ddaa33">&#9632;</span> Chest (closed)
+        </button>
+        <button class="tool-btn" data-tool="obj_chest_opened">
+            <span class="icon" style="color:#ddcc55">&#9632;</span> Chest (open)
+        </button>
+        <button class="tool-btn" data-tool="obj_chain1">
+            <span class="icon" style="color:#8888aa">&#9632;</span> Chain 1
+        </button>
+        <button class="tool-btn" data-tool="obj_chain2">
+            <span class="icon" style="color:#9999bb">&#9632;</span> Chain 2
+        </button>
+        <button class="tool-btn" data-tool="obj_lever1">
+            <span class="icon" style="color:#aa8866">&#9632;</span> Lever (off)
+        </button>
+        <button class="tool-btn" data-tool="obj_lever2">
+            <span class="icon" style="color:#bb9977">&#9632;</span> Lever (on)
+        </button>
+        <button class="tool-btn" data-tool="obj_shield">
+            <span class="icon" style="color:#7799cc">&#9632;</span> Shield
+        </button>
+        <button class="tool-btn" data-tool="obj_window">
+            <span class="icon" style="color:#6688bb">&#9632;</span> Window
+        </button>
+        <button class="tool-btn" data-tool="obj_window_small">
+            <span class="icon" style="color:#5577aa">&#9632;</span> Window (small)
+        </button>
+        <button class="tool-btn" data-tool="obj_walls1">
+            <span class="icon" style="color:#665544">&#9632;</span> Wall 1
+        </button>
+        <button class="tool-btn" data-tool="obj_walls2">
+            <span class="icon" style="color:#776655">&#9632;</span> Wall 2
+        </button>
+        <button class="tool-btn" data-tool="obj_stairs_full">
+            <span class="icon" style="color:#887766">&#9632;</span> Stairs
+        </button>
+
+        <h3>Triggers</h3>
+        <button class="tool-btn" data-tool="story">
+            <span class="icon" style="color:#55ccaa">S</span> Story Trigger
+        </button>
+        <button class="tool-btn" data-tool="npc">
+            <span class="icon" style="color:#cc88ff">N</span> NPC
+        </button>
+    </div>
+
+    <!-- Canvas -->
+    <div class="canvas-wrap" id="canvasWrap">
+        <canvas id="editorCanvas"></canvas>
+    </div>
+</div>
+
+<!-- ─── Bottom Bar ───────────────────────────────────────────── -->
+<div class="bottombar">
+    <span class="info" id="statusInfo">Ready</span>
+    <button id="clearBtn">Clear All</button>
+    <button id="importBtn">Import JSON</button>
+    <button id="exportBtn">Export JSON</button>
+</div>
+
+<!-- ─── Hidden file input ──────────────────────────────────── -->
+<input type="file" id="fileInput" accept=".json" style="display:none">
+
+<!-- ─── Story Modal ──────────────────────────────────────────── -->
+<div class="modal-overlay" id="storyModal">
+    <div class="modal">
+        <h2>Story Trigger</h2>
+        <div class="field">
+            <label>Name</label>
+            <input type="text" id="storyName" placeholder="e.g. tutorial_move">
+        </div>
+        <div class="field">
+            <label>Speaker</label>
+            <input type="text" id="storySpeaker" placeholder="e.g. Tutorial">
+        </div>
+        <div class="field">
+            <label>Text (use | for line breaks)</label>
+            <textarea id="storyText" placeholder="Line one|Line two|Line three"></textarea>
+        </div>
+        <div class="field">
+            <div class="checkbox-row">
+                <input type="checkbox" id="storyOneShot" checked>
+                <label style="margin-bottom:0">One-shot (trigger only once)</label>
+            </div>
+        </div>
+        <div class="actions">
+            <button id="storyCancelBtn">Cancel</button>
+            <button id="storyOkBtn" class="primary">Place</button>
+        </div>
+    </div>
+</div>
+
+<!-- ─── NPC Modal ────────────────────────────────────────────── -->
+<div class="modal-overlay" id="npcModal">
+    <div class="modal">
+        <h2>NPC</h2>
+        <div class="field">
+            <label>Name</label>
+            <input type="text" id="npcName" placeholder="e.g. Kael">
+        </div>
+        <div class="field">
+            <label>Sprite</label>
+            <select id="npcSprite">
+                <option value="Swordsman">Swordsman</option>
+                <option value="Wizard">Wizard</option>
+            </select>
+        </div>
+        <div class="field">
+            <label>Dialog (use | for line breaks; prefix with "Name: ")</label>
+            <textarea id="npcDialog" placeholder="Kael: Hello there.|Kael: Be careful ahead."></textarea>
+        </div>
+        <div class="actions">
+            <button id="npcCancelBtn">Cancel</button>
+            <button id="npcOkBtn" class="primary">Place</button>
+        </div>
+    </div>
+</div>
+
+<!-- ─── Door Modal ───────────────────────────────────────────── -->
+<div class="modal-overlay" id="doorModal">
+    <div class="modal">
+        <h2>Door</h2>
+        <div class="field">
+            <label>Next Level (e.g. level2, or leave blank for final)</label>
+            <input type="text" id="doorNextLevel" placeholder="level2">
+        </div>
+        <div class="actions">
+            <button id="doorCancelBtn">Cancel</button>
+            <button id="doorOkBtn" class="primary">Place</button>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    'use strict';
+
+    // ─── Object definitions ────────────────────────────────
+    var OBJ_BASE = 'assets/sprites/medivial/Objects/';
+    var OBJ_DEFS = {
+        torch:          { file: 'torch.png',          w: 32, h: 32, color: '#ff8833', label: '\u{1F525}' },
+        barrel:         { file: 'barrel.png',         w: 32, h: 32, color: '#aa7744', label: 'Ba' },
+        box:            { file: 'box.png',            w: 32, h: 32, color: '#997755', label: 'Bx' },
+        vase:           { file: 'vase.png',           w: 32, h: 32, color: '#88aa66', label: 'Va' },
+        chest_closed:   { file: 'chest_closed.png',   w: 32, h: 32, color: '#ddaa33', label: 'Cc' },
+        chest_opened:   { file: 'chest_opened.png',   w: 32, h: 32, color: '#ddcc55', label: 'Co' },
+        chain1:         { file: 'chain1.png',         w: 64, h: 64, color: '#8888aa', label: 'C1' },
+        chain2:         { file: 'chain2.png',         w: 64, h: 64, color: '#9999bb', label: 'C2' },
+        lever1:         { file: 'lever1.png',         w: 64, h: 64, color: '#aa8866', label: 'L1' },
+        lever2:         { file: 'lever2.png',         w: 64, h: 64, color: '#bb9977', label: 'L2' },
+        shield:         { file: 'shield.png',         w: 64, h: 64, color: '#7799cc', label: 'Sh' },
+        window:         { file: 'window.png',         w: 64, h: 64, color: '#6688bb', label: 'Wi' },
+        window_small:   { file: 'window_small.png',   w: 32, h: 32, color: '#5577aa', label: 'Ws' },
+        walls1:         { file: 'walls1.png',         w: 64, h: 64, color: '#665544', label: 'W1' },
+        walls2:         { file: 'walls2.png',         w: 64, h: 64, color: '#776655', label: 'W2' },
+        stairs_full:    { file: 'stairs_full.png',    w: 128, h: 128, color: '#887766', label: 'St' },
+    };
+
+    var objImages = {};
+    var objKeys = Object.keys(OBJ_DEFS);
+    var objLoadCount = 0;
+    for (var k = 0; k < objKeys.length; k++) {
+        (function(key) {
+            var img = new Image();
+            img.onload = function() {
+                objLoadCount++;
+                if (objLoadCount >= objKeys.length) draw();
+            };
+            img.onerror = function() { objLoadCount++; };
+            img.src = OBJ_BASE + OBJ_DEFS[key].file;
+            objImages[key] = img;
+        })(objKeys[k]);
+    }
+
+    // ─── State ──────────────────────────────────────────────
+    var CELL = 24;
+    var state = {
+        cols: 130,
+        rows: 17,
+        tileSize: 32,
+        terrain: [],
+        playerStart: null,
+        door: null,
+        enemies: [],
+        decorations: [],
+        storyTriggers: [],
+        npcs: [],
+        tool: 'ground',
+        painting: false,
+        pendingEnemy: null,
+    };
+
+    var canvas = document.getElementById('editorCanvas');
+    var ctx = canvas.getContext('2d');
+    var wrap = document.getElementById('canvasWrap');
+
+    var animTick = 0;
+
+    // ─── Init ───────────────────────────────────────────────
+    function initTerrain() {
+        state.terrain = [];
+        for (var i = 0; i < state.cols * state.rows; i++) state.terrain.push(0);
+    }
+
+    function resizeCanvas() {
+        canvas.width = state.cols * CELL;
+        canvas.height = state.rows * CELL;
+        draw();
+    }
+
+    initTerrain();
+    resizeCanvas();
+
+    // ─── Drawing ────────────────────────────────────────────
+    var COLORS = {
+        0: 'transparent',
+        1: '#5a4030',
+        2: '#4a7a3a',
+        3: '#6a6a7a',
+    };
+    var GRASS_TOP = '#5eaa4a';
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // grid background
+        ctx.fillStyle = '#0e0e18';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // tiles
+        for (var r = 0; r < state.rows; r++) {
+            for (var c = 0; c < state.cols; c++) {
+                var val = state.terrain[r * state.cols + c];
+                if (val === 0) continue;
+                var x = c * CELL, y = r * CELL;
+                ctx.fillStyle = COLORS[val] || '#333';
+                ctx.fillRect(x, y, CELL, CELL);
+                if (val === 2) {
+                    ctx.fillStyle = GRASS_TOP;
+                    ctx.fillRect(x, y, CELL, 3);
+                }
+            }
+        }
+
+        // grid lines (subtle)
+        ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+        ctx.lineWidth = 0.5;
+        for (var c = 0; c <= state.cols; c++) {
+            ctx.beginPath();
+            ctx.moveTo(c * CELL, 0);
+            ctx.lineTo(c * CELL, canvas.height);
+            ctx.stroke();
+        }
+        for (var r = 0; r <= state.rows; r++) {
+            ctx.beginPath();
+            ctx.moveTo(0, r * CELL);
+            ctx.lineTo(canvas.width, r * CELL);
+            ctx.stroke();
+        }
+
+        // player start
+        if (state.playerStart) {
+            drawMarker(state.playerStart.col, state.playerStart.row, '#55ccff', 'P');
+        }
+
+        // door
+        if (state.door) {
+            drawMarker(state.door.col, state.door.row, '#ffaa33', 'D');
+        }
+
+        // enemies with patrol ranges
+        for (var i = 0; i < state.enemies.length; i++) {
+            var e = state.enemies[i];
+            var label = e.type === 'centipede' ? 'C' : e.type === 'battle_turtle' ? 'T' : 'B';
+            var color = e.type === 'centipede' ? '#cc5555' : e.type === 'battle_turtle' ? '#55aa55' : '#aa55cc';
+            drawMarker(e.col, e.row, color, label);
+            // patrol line
+            if (e.patrolLeftCol != null && e.patrolRightCol != null) {
+                var py = e.row * CELL + CELL / 2;
+                ctx.strokeStyle = color;
+                ctx.globalAlpha = 0.4;
+                ctx.lineWidth = 2;
+                ctx.setLineDash([4, 4]);
+                ctx.beginPath();
+                ctx.moveTo(e.patrolLeftCol * CELL, py);
+                ctx.lineTo(e.patrolRightCol * CELL, py);
+                ctx.stroke();
+                ctx.setLineDash([]);
+                ctx.globalAlpha = 1;
+            }
+        }
+
+        // decorations (objects with sprite previews)
+        for (var i = 0; i < state.decorations.length; i++) {
+            var d = state.decorations[i];
+            var def = d.objectType ? OBJ_DEFS[d.objectType] : null;
+            var img = d.objectType ? objImages[d.objectType] : null;
+
+            if (img && img.complete && img.naturalWidth && def) {
+                var cellsW = Math.max(1, Math.ceil(def.w / 32));
+                var cellsH = Math.max(1, Math.ceil(def.h / 32));
+                var dx = d.col * CELL;
+                var dy = d.row * CELL;
+                var dw = cellsW * CELL;
+                var dh = cellsH * CELL;
+
+                ctx.save();
+                // torch: flickering glow
+                if (d.objectType === 'torch') {
+                    var glowR = CELL * 0.7 + Math.sin(animTick * 0.08 + i) * 3;
+                    var grd = ctx.createRadialGradient(dx + CELL / 2, dy + CELL * 0.3, 0, dx + CELL / 2, dy + CELL * 0.3, glowR);
+                    grd.addColorStop(0, 'rgba(255,150,30,0.35)');
+                    grd.addColorStop(1, 'rgba(255,100,0,0)');
+                    ctx.fillStyle = grd;
+                    ctx.fillRect(dx - CELL / 2, dy - CELL / 2, CELL * 2, CELL * 2);
+                }
+                // chain: slight sway
+                if (d.objectType === 'chain1' || d.objectType === 'chain2') {
+                    var sway = Math.sin(animTick * 0.04 + i * 2) * 1.5;
+                    ctx.translate(dx + dw / 2, dy);
+                    ctx.rotate(sway * Math.PI / 180);
+                    ctx.translate(-(dx + dw / 2), -dy);
+                }
+
+                ctx.imageSmoothingEnabled = false;
+                ctx.drawImage(img, dx, dy, dw, dh);
+                ctx.restore();
+
+                // border highlight
+                ctx.strokeStyle = def.color;
+                ctx.globalAlpha = 0.5;
+                ctx.lineWidth = 1;
+                ctx.strokeRect(dx, dy, dw, dh);
+                ctx.globalAlpha = 1;
+            } else {
+                var fallbackColor = def ? def.color : '#cccc55';
+                var fallbackLabel = def ? def.label : '\u2605';
+                drawMarker(d.col, d.row, fallbackColor, fallbackLabel);
+            }
+        }
+
+        // story triggers
+        for (var i = 0; i < state.storyTriggers.length; i++) {
+            var s = state.storyTriggers[i];
+            drawMarker(s.col, s.row, '#55ccaa', 'S');
+        }
+
+        // npcs
+        for (var i = 0; i < state.npcs.length; i++) {
+            var n = state.npcs[i];
+            drawMarker(n.col, n.row, '#cc88ff', 'N');
+        }
+
+        // pending enemy patrol indicator
+        if (state.pendingEnemy) {
+            drawMarker(state.pendingEnemy.col, state.pendingEnemy.row, '#ff6666', '?');
+        }
+
+        updateStatus();
+    }
+
+    function drawMarker(col, row, color, letter) {
+        var x = col * CELL, y = row * CELL;
+        ctx.fillStyle = color;
+        ctx.globalAlpha = 0.35;
+        ctx.fillRect(x + 1, y + 1, CELL - 2, CELL - 2);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(x + 1, y + 1, CELL - 2, CELL - 2);
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(letter, x + CELL / 2, y + CELL / 2);
+    }
+
+    function updateStatus() {
+        var parts = [];
+        parts.push(state.cols + 'x' + state.rows);
+        parts.push(state.enemies.length + ' enemies');
+        parts.push(state.decorations.length + ' objects');
+        parts.push(state.storyTriggers.length + ' triggers');
+        parts.push(state.npcs.length + ' NPCs');
+        if (state.playerStart) parts.push('Player: col ' + state.playerStart.col);
+        if (state.door) parts.push('Door: col ' + state.door.col);
+        document.getElementById('statusInfo').textContent = parts.join('  \u00b7  ');
+    }
+
+    // ─── Terrain Helpers ────────────────────────────────────
+    function setTile(r, c, val) {
+        if (r >= 0 && r < state.rows && c >= 0 && c < state.cols)
+            state.terrain[r * state.cols + c] = val;
+    }
+
+    function getTile(r, c) {
+        if (r < 0 || r >= state.rows || c < 0 || c >= state.cols) return 0;
+        return state.terrain[r * state.cols + c];
+    }
+
+    function fillGround(col, topRow) {
+        setTile(topRow, col, 2);
+        for (var r = topRow + 1; r < state.rows; r++)
+            setTile(r, col, 1);
+    }
+
+    function eraseTile(col, row) {
+        setTile(row, col, 0);
+        removeEntityAt(col, row);
+    }
+
+    function removeEntityAt(col, row) {
+        state.enemies = state.enemies.filter(function(e) { return !(e.col === col && e.row === row); });
+        state.decorations = state.decorations.filter(function(d) { return !(d.col === col && d.row === row); });
+        state.storyTriggers = state.storyTriggers.filter(function(s) { return !(s.col === col && s.row === row); });
+        state.npcs = state.npcs.filter(function(n) { return !(n.col === col && n.row === row); });
+        if (state.playerStart && state.playerStart.col === col && state.playerStart.row === row)
+            state.playerStart = null;
+        if (state.door && state.door.col === col && state.door.row === row)
+            state.door = null;
+    }
+
+    // ─── Tool Selection ─────────────────────────────────────
+    var toolBtns = document.querySelectorAll('.tool-btn');
+    for (var i = 0; i < toolBtns.length; i++) {
+        (function(btn) {
+            btn.addEventListener('click', function() {
+                state.tool = btn.getAttribute('data-tool');
+                state.pendingEnemy = null;
+                for (var j = 0; j < toolBtns.length; j++)
+                    toolBtns[j].classList.remove('active');
+                btn.classList.add('active');
+            });
+        })(toolBtns[i]);
+    }
+
+    // ─── Canvas Interaction ─────────────────────────────────
+    function getCellFromEvent(e) {
+        var rect = canvas.getBoundingClientRect();
+        var x = e.clientX - rect.left;
+        var y = e.clientY - rect.top;
+        return {
+            col: Math.floor(x / CELL),
+            row: Math.floor(y / CELL),
+        };
+    }
+
+    function applyTool(col, row, isRightClick) {
+        if (col < 0 || col >= state.cols || row < 0 || row >= state.rows) return;
+
+        if (isRightClick) {
+            eraseTile(col, row);
+            draw();
+            return;
+        }
+
+        var tool = state.tool;
+
+        // terrain tools support dragging
+        if (tool === 'ground') {
+            fillGround(col, row);
+            draw();
+        } else if (tool === 'platform') {
+            setTile(row, col, 3);
+            draw();
+        } else if (tool === 'erase') {
+            eraseTile(col, row);
+            draw();
+        }
+    }
+
+    function applySingleTool(col, row) {
+        if (col < 0 || col >= state.cols || row < 0 || row >= state.rows) return;
+
+        var tool = state.tool;
+
+        if (tool === 'playerStart') {
+            state.playerStart = { col: col, row: row };
+            draw();
+        } else if (tool === 'door') {
+            showDoorModal(col, row);
+        } else if (tool === 'centipede' || tool === 'battle_turtle' || tool === 'big_bloated') {
+            if (state.pendingEnemy && state.pendingEnemy.type === tool) {
+                var pe = state.pendingEnemy;
+                var leftCol = Math.min(pe.col, col);
+                var rightCol = Math.max(pe.col, col);
+                state.enemies.push({
+                    type: pe.type,
+                    col: pe.col,
+                    row: pe.row,
+                    patrolLeftCol: leftCol,
+                    patrolRightCol: rightCol,
+                });
+                state.pendingEnemy = null;
+                draw();
+            } else {
+                state.pendingEnemy = { type: tool, col: col, row: row };
+                draw();
+            }
+        } else if (tool.indexOf('obj_') === 0) {
+            var objType = tool.substring(4);
+            state.decorations.push({ col: col, row: row, objectType: objType });
+            draw();
+        } else if (tool === 'story') {
+            showStoryModal(col, row);
+        } else if (tool === 'npc') {
+            showNpcModal(col, row);
+        }
+    }
+
+    canvas.addEventListener('mousedown', function(e) {
+        e.preventDefault();
+        var cell = getCellFromEvent(e);
+        var isRight = (e.button === 2);
+
+        var terrainTools = ['ground', 'platform', 'erase'];
+        if (terrainTools.indexOf(state.tool) !== -1 || isRight) {
+            state.painting = true;
+            applyTool(cell.col, cell.row, isRight);
+        } else {
+            applySingleTool(cell.col, cell.row);
+        }
+    });
+
+    canvas.addEventListener('mousemove', function(e) {
+        if (!state.painting) return;
+        var cell = getCellFromEvent(e);
+        var isRight = (e.buttons === 2);
+        applyTool(cell.col, cell.row, isRight);
+    });
+
+    canvas.addEventListener('mouseup', function() {
+        state.painting = false;
+    });
+
+    canvas.addEventListener('mouseleave', function() {
+        state.painting = false;
+    });
+
+    canvas.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+    });
+
+    // ─── Modals ─────────────────────────────────────────────
+
+    // Story
+    var pendingStoryCell = null;
+
+    function showStoryModal(col, row) {
+        pendingStoryCell = { col: col, row: row };
+        document.getElementById('storyName').value = '';
+        document.getElementById('storySpeaker').value = '';
+        document.getElementById('storyText').value = '';
+        document.getElementById('storyOneShot').checked = true;
+        document.getElementById('storyModal').classList.add('visible');
+    }
+
+    document.getElementById('storyOkBtn').addEventListener('click', function() {
+        if (!pendingStoryCell) return;
+        state.storyTriggers.push({
+            name: document.getElementById('storyName').value || 'trigger_' + Date.now(),
+            col: pendingStoryCell.col,
+            row: pendingStoryCell.row,
+            text: document.getElementById('storyText').value,
+            speaker: document.getElementById('storySpeaker').value,
+            oneShot: document.getElementById('storyOneShot').checked,
+        });
+        document.getElementById('storyModal').classList.remove('visible');
+        pendingStoryCell = null;
+        draw();
+    });
+
+    document.getElementById('storyCancelBtn').addEventListener('click', function() {
+        document.getElementById('storyModal').classList.remove('visible');
+        pendingStoryCell = null;
+    });
+
+    // NPC
+    var pendingNpcCell = null;
+
+    function showNpcModal(col, row) {
+        pendingNpcCell = { col: col, row: row };
+        document.getElementById('npcName').value = '';
+        document.getElementById('npcDialog').value = '';
+        document.getElementById('npcModal').classList.add('visible');
+    }
+
+    document.getElementById('npcOkBtn').addEventListener('click', function() {
+        if (!pendingNpcCell) return;
+        state.npcs.push({
+            name: document.getElementById('npcName').value || 'NPC',
+            col: pendingNpcCell.col,
+            row: pendingNpcCell.row,
+            sprite: document.getElementById('npcSprite').value,
+            dialog: document.getElementById('npcDialog').value,
+        });
+        document.getElementById('npcModal').classList.remove('visible');
+        pendingNpcCell = null;
+        draw();
+    });
+
+    document.getElementById('npcCancelBtn').addEventListener('click', function() {
+        document.getElementById('npcModal').classList.remove('visible');
+        pendingNpcCell = null;
+    });
+
+    // Door
+    var pendingDoorCell = null;
+
+    function showDoorModal(col, row) {
+        pendingDoorCell = { col: col, row: row };
+        document.getElementById('doorNextLevel').value = '';
+        document.getElementById('doorModal').classList.add('visible');
+    }
+
+    document.getElementById('doorOkBtn').addEventListener('click', function() {
+        if (!pendingDoorCell) return;
+        var nextLevel = document.getElementById('doorNextLevel').value.trim() || null;
+        state.door = { col: pendingDoorCell.col, row: pendingDoorCell.row, nextLevel: nextLevel };
+        document.getElementById('doorModal').classList.remove('visible');
+        pendingDoorCell = null;
+        draw();
+    });
+
+    document.getElementById('doorCancelBtn').addEventListener('click', function() {
+        document.getElementById('doorModal').classList.remove('visible');
+        pendingDoorCell = null;
+    });
+
+    // ─── Resize ─────────────────────────────────────────────
+    document.getElementById('resizeBtn').addEventListener('click', function() {
+        var newCols = parseInt(document.getElementById('colsInput').value) || 130;
+        var newRows = parseInt(document.getElementById('rowsInput').value) || 17;
+        newCols = Math.max(20, Math.min(300, newCols));
+        newRows = Math.max(8, Math.min(30, newRows));
+
+        var oldTerrain = state.terrain;
+        var oldCols = state.cols;
+        var oldRows = state.rows;
+
+        state.cols = newCols;
+        state.rows = newRows;
+        state.terrain = [];
+        for (var i = 0; i < newCols * newRows; i++) state.terrain.push(0);
+
+        // copy existing data
+        var copyR = Math.min(oldRows, newRows);
+        var copyC = Math.min(oldCols, newCols);
+        for (var r = 0; r < copyR; r++) {
+            for (var c = 0; c < copyC; c++) {
+                state.terrain[r * newCols + c] = oldTerrain[r * oldCols + c];
+            }
+        }
+
+        // clamp entities
+        state.enemies = state.enemies.filter(function(e) { return e.col < newCols && e.row < newRows; });
+        state.decorations = state.decorations.filter(function(d) { return d.col < newCols && d.row < newRows; });
+        state.storyTriggers = state.storyTriggers.filter(function(s) { return s.col < newCols && s.row < newRows; });
+        state.npcs = state.npcs.filter(function(n) { return n.col < newCols && n.row < newRows; });
+        if (state.playerStart && (state.playerStart.col >= newCols || state.playerStart.row >= newRows))
+            state.playerStart = null;
+        if (state.door && (state.door.col >= newCols || state.door.row >= newRows))
+            state.door = null;
+
+        resizeCanvas();
+    });
+
+    // ─── Clear ──────────────────────────────────────────────
+    document.getElementById('clearBtn').addEventListener('click', function() {
+        if (!confirm('Clear all terrain and entities?')) return;
+        initTerrain();
+        state.playerStart = null;
+        state.door = null;
+        state.enemies = [];
+        state.decorations = [];
+        state.storyTriggers = [];
+        state.npcs = [];
+        state.pendingEnemy = null;
+        draw();
+    });
+
+    // ─── Export ──────────────────────────────────────────────
+    document.getElementById('exportBtn').addEventListener('click', function() {
+        var themeColors = {
+            forest: null,
+            desert: { grass: "#a08860", grassTop: "#c0a870", dirt: "#8a7050", dirtAccent: "#6a5540", platform: "#7a6a50" },
+            dark:   { grass: "#3a5a3a", grassTop: "#4a6a4a", dirt: "#2e3e2e", dirtAccent: "#1e2e1e", platform: "#4a4a5a" },
+        };
+        var theme = document.getElementById('themeSelect').value;
+        var data = {
+            name: document.getElementById('levelName').value || 'Untitled',
+            cols: state.cols,
+            rows: state.rows,
+            tileSize: state.tileSize,
+            theme: theme,
+            fx: document.getElementById('fxSelect').value,
+            musicStartTime: parseInt(document.getElementById('musicStart').value) || 0,
+            tileColors: themeColors[theme] || null,
+            terrain: state.terrain,
+            playerStart: state.playerStart || { col: 2, row: state.rows - 3 },
+            door: state.door || { col: state.cols - 6, nextLevel: null },
+            enemies: state.enemies,
+            decorations: state.decorations,
+            npcs: state.npcs,
+            storyTriggers: state.storyTriggers,
+        };
+
+        var json = JSON.stringify(data);
+        var blob = new Blob([json], { type: 'application/json' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = (document.getElementById('levelName').value || 'level').replace(/\s+/g, '_').toLowerCase() + '.json';
+        a.click();
+        URL.revokeObjectURL(url);
+
+        // also copy to clipboard
+        try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(json);
+            }
+        } catch(e) {}
+    });
+
+    // ─── Import ─────────────────────────────────────────────
+    var fileInput = document.getElementById('fileInput');
+
+    document.getElementById('importBtn').addEventListener('click', function() {
+        fileInput.click();
+    });
+
+    fileInput.addEventListener('change', function(e) {
+        var file = e.target.files[0];
+        if (!file) return;
+        var reader = new FileReader();
+        reader.onload = function(ev) {
+            try {
+                var data = JSON.parse(ev.target.result);
+                loadLevelData(data);
+            } catch(err) {
+                alert('Invalid JSON file: ' + err.message);
+            }
+        };
+        reader.readAsText(file);
+        fileInput.value = '';
+    });
+
+    function loadLevelData(data) {
+        state.cols = data.cols || 130;
+        state.rows = data.rows || 17;
+        state.tileSize = data.tileSize || 32;
+        state.terrain = data.terrain || [];
+        // pad terrain if needed
+        while (state.terrain.length < state.cols * state.rows) state.terrain.push(0);
+
+        state.playerStart = data.playerStart || null;
+        state.door = data.door || null;
+        state.enemies = data.enemies || [];
+        state.decorations = data.decorations || [];
+        state.storyTriggers = data.storyTriggers || [];
+        state.npcs = data.npcs || [];
+
+        // update UI
+        document.getElementById('levelName').value = data.name || 'Imported Level';
+        document.getElementById('colsInput').value = state.cols;
+        document.getElementById('rowsInput').value = state.rows;
+        document.getElementById('themeSelect').value = data.theme || 'forest';
+        document.getElementById('fxSelect').value = data.fx || 'wind_leaves';
+        document.getElementById('musicStart').value = data.musicStartTime || 0;
+
+        // add row info and default objectType to decorations if missing
+        for (var i = 0; i < state.decorations.length; i++) {
+            if (state.decorations[i].row == null) state.decorations[i].row = state.rows - 2;
+            if (!state.decorations[i].objectType) state.decorations[i].objectType = 'barrel';
+        }
+        for (var i = 0; i < state.storyTriggers.length; i++) {
+            if (state.storyTriggers[i].row == null) state.storyTriggers[i].row = state.rows - 3;
+        }
+        for (var i = 0; i < state.npcs.length; i++) {
+            if (state.npcs[i].row == null) state.npcs[i].row = state.rows - 2;
+        }
+
+        resizeCanvas();
+    }
+
+    // ─── Keyboard Shortcuts ─────────────────────────────────
+    document.addEventListener('keydown', function(e) {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+        switch(e.key) {
+            case '1': selectTool('ground'); break;
+            case '2': selectTool('platform'); break;
+            case '3': selectTool('erase'); break;
+            case 'p': selectTool('playerStart'); break;
+            case 'd': selectTool('door'); break;
+            case 'c': selectTool('centipede'); break;
+            case 't': selectTool('battle_turtle'); break;
+            case 'b': selectTool('big_bloated'); break;
+            case 'x': selectTool('obj_torch'); break;
+            case 's':
+                if (e.ctrlKey || e.metaKey) {
+                    e.preventDefault();
+                    document.getElementById('exportBtn').click();
+                } else {
+                    selectTool('story');
+                }
+                break;
+            case 'n': selectTool('npc'); break;
+            case 'Escape':
+                state.pendingEnemy = null;
+                draw();
+                break;
+        }
+    });
+
+    function selectTool(toolName) {
+        state.tool = toolName;
+        state.pendingEnemy = null;
+        for (var j = 0; j < toolBtns.length; j++) {
+            if (toolBtns[j].getAttribute('data-tool') === toolName)
+                toolBtns[j].classList.add('active');
+            else
+                toolBtns[j].classList.remove('active');
+        }
+    }
+
+    // ─── Animation loop for animated sprite previews ──────
+    var lastAnimTime = 0;
+    function animLoop(ts) {
+        if (ts - lastAnimTime > 66) {
+            lastAnimTime = ts;
+            var hasAnimated = false;
+            for (var i = 0; i < state.decorations.length; i++) {
+                var ot = state.decorations[i].objectType;
+                if (ot === 'torch' || ot === 'chain1' || ot === 'chain2') {
+                    hasAnimated = true;
+                    break;
+                }
+            }
+            if (hasAnimated) {
+                animTick++;
+                draw();
+            }
+        }
+        requestAnimationFrame(animLoop);
+    }
+
+    // ─── Initial draw & start animation ─────────────────
+    draw();
+    requestAnimationFrame(animLoop);
+
+})();
+</script>
+</body>
+</html>

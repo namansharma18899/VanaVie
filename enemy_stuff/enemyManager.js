@@ -46,6 +46,31 @@ export class EnemyManager {
         this.enemies = [];
     }
 
+    getFlankDirection(enemy, player) {
+        const COORD_RADIUS = 200;
+        const playerCX = player.x + player.width / 2;
+        const enemyCX = enemy.x + enemy.width / 2;
+        let leftCount = 0;
+        let rightCount = 0;
+
+        for (const other of this.enemies) {
+            if (other === enemy) continue;
+            if (other.currentState !== other.states[EnemyState.CHASE]
+                && other.currentState !== other.states[EnemyState.ATTACK]) continue;
+            const otherCX = other.x + other.width / 2;
+            if (Math.abs(otherCX - playerCX) > COORD_RADIUS) continue;
+            if (otherCX < playerCX) leftCount++;
+            else rightCount++;
+        }
+
+        if (leftCount === 0 && rightCount === 0) return 0;
+
+        const directDir = playerCX > enemyCX ? 1 : -1;
+        if (directDir > 0 && rightCount > leftCount) return -1;
+        if (directDir < 0 && leftCount > rightCount) return 1;
+        return 0;
+    }
+
     alertNearby(sourceEnemy) {
         for (const other of this.enemies) {
             if (other === sourceEnemy || other.alerted) continue;
