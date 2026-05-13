@@ -1,8 +1,5 @@
 import { Enemy, EnemyState } from './enemy.js';
-import { resolveCollisions, checkEntityCollision } from '../game_stuff/collision.js';
-
-const ALERT_RADIUS = 500;
-const ALERT_DURATION = 6000;
+import { resolveCollisions } from '../game_stuff/collision.js';
 
 export class EnemyManager {
     constructor(game) {
@@ -46,48 +43,9 @@ export class EnemyManager {
         this.enemies = [];
     }
 
-    getFlankDirection(enemy, player) {
-        const COORD_RADIUS = 200;
-        const playerCX = player.x + player.width / 2;
-        const enemyCX = enemy.x + enemy.width / 2;
-        let leftCount = 0;
-        let rightCount = 0;
-
-        for (const other of this.enemies) {
-            if (other === enemy) continue;
-            if (other.currentState !== other.states[EnemyState.CHASE]
-                && other.currentState !== other.states[EnemyState.ATTACK]) continue;
-            const otherCX = other.x + other.width / 2;
-            if (Math.abs(otherCX - playerCX) > COORD_RADIUS) continue;
-            if (otherCX < playerCX) leftCount++;
-            else rightCount++;
-        }
-
-        if (leftCount === 0 && rightCount === 0) return 0;
-
-        const directDir = playerCX > enemyCX ? 1 : -1;
-        if (directDir > 0 && rightCount > leftCount) return -1;
-        if (directDir < 0 && leftCount > rightCount) return 1;
-        return 0;
-    }
-
-    alertNearby(sourceEnemy) {
-        for (const other of this.enemies) {
-            if (other === sourceEnemy || other.alerted) continue;
-            if (other.currentState === other.states[EnemyState.DEAD]) continue;
-            const dist = sourceEnemy.distanceTo(other);
-            if (dist <= ALERT_RADIUS) {
-                other.alerted = true;
-                other.alertTimer = ALERT_DURATION;
-            }
-        }
-    }
-
     update(deltaTime, player, tileMap) {
         for (let i = this.enemies.length - 1; i >= 0; i--) {
             const enemy = this.enemies[i];
-            const wasChasing = enemy.currentState === enemy.states[EnemyState.CHASE]
-                             || enemy.currentState === enemy.states[EnemyState.ATTACK];
 
             enemy.update(deltaTime, player);
             resolveCollisions(enemy, tileMap);
@@ -97,16 +55,7 @@ export class EnemyManager {
                 continue;
             }
 
-            const nowChasing = enemy.currentState === enemy.states[EnemyState.CHASE]
-                             || enemy.currentState === enemy.states[EnemyState.ATTACK];
-            if (!wasChasing && nowChasing) {
-                enemy.alerted = true;
-                enemy.alertTimer = ALERT_DURATION;
-                this.alertNearby(enemy);
-            }
-
             this.checkProjectileHits(enemy, player);
-            this.checkEnemyProjectileHits(enemy, player);
         }
     }
 
@@ -117,16 +66,6 @@ export class EnemyManager {
                 projectile.markedForDeletion = true;
                 enemy.takeDamage(player.damage);
                 if (this.game.audio) this.game.audio.play('enemyHurt');
-            }
-        }
-    }
-
-    checkEnemyProjectileHits(enemy, player) {
-        for (const proj of enemy.projectiles) {
-            if (proj.markedForDeletion) continue;
-            if (proj.collidesWithPlayer(player)) {
-                proj.markedForDeletion = true;
-                player.takeDamage(proj.damage);
             }
         }
     }

@@ -41,6 +41,9 @@ class Game {
 
         this.devMode = new URLSearchParams(window.location.search).has('dev');
         this.debug = this.devMode;
+
+        this.movementTutorial = 'waiting';
+        this.tutorialAlpha = 0;
     }
 
     async init() {
@@ -71,6 +74,24 @@ class Game {
             }
             if (e.key === 'm') this.audio.toggleMute();
         });
+
+        const tutorialHandler = (e) => {
+            const movementKeys = ['w', 'a', 's', 'd'];
+            if (this.movementTutorial === 'waiting') {
+                if (movementKeys.includes(e.key.toLowerCase())) {
+                    this.movementTutorial = 'dismissed';
+                    window.removeEventListener('keydown', tutorialHandler);
+                } else {
+                    this.movementTutorial = 'showing';
+                }
+            } else if (this.movementTutorial === 'showing') {
+                if (movementKeys.includes(e.key.toLowerCase())) {
+                    this.movementTutorial = 'dismissed';
+                    window.removeEventListener('keydown', tutorialHandler);
+                }
+            }
+        };
+        window.addEventListener('keydown', tutorialHandler);
     }
 
     async loadLevel(levelName) {
@@ -690,6 +711,12 @@ class Game {
 
         this.hud.update();
 
+        if (this.movementTutorial === 'showing') {
+            this.tutorialAlpha = Math.min(1, this.tutorialAlpha + deltaTime / 300);
+        } else if (this.movementTutorial === 'dismissed' && this.tutorialAlpha > 0) {
+            this.tutorialAlpha = Math.max(0, this.tutorialAlpha - deltaTime / 300);
+        }
+
         if (this.levelManager.tileMap && this.player.y > this.levelManager.tileMap.worldHeight + 64) {
             this.player.health = 0;
             this.gameOver = true;
@@ -817,6 +844,8 @@ class Game {
         this.storyManager.draw(ctx);
         this.levelManager.drawFade(ctx);
 
+        if (this.tutorialAlpha > 0) this.drawMovementTutorial(ctx);
+
         if (this.door && this.door.state === 'fading') {
             ctx.fillStyle = `rgba(0, 0, 0, ${this.door.fadeAlpha})`;
             ctx.fillRect(0, 0, this.width, this.height);
@@ -852,6 +881,54 @@ class Game {
             ctx.fillText('PAUSED', this.width / 2, this.height / 2);
             ctx.textAlign = 'left';
         }
+    }
+
+    drawMovementTutorial(ctx) {
+        const cx = this.width / 2;
+        const by = this.height - 60;
+        const keySize = 28;
+        const gap = 4;
+
+        ctx.save();
+        ctx.globalAlpha = this.tutorialAlpha;
+
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+        const boxW = 160;
+        const boxH = 100;
+        const boxX = cx - boxW / 2;
+        const boxY = by - 70;
+        ctx.beginPath();
+        ctx.roundRect(boxX, boxY, boxW, boxH, 6);
+        ctx.fill();
+
+        const drawKey = (label, x, y) => {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+            ctx.beginPath();
+            ctx.roundRect(x, y, keySize, keySize, 4);
+            ctx.fill();
+            ctx.fillStyle = '#ccaa55';
+            ctx.font = 'bold 14px monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(label, x + keySize / 2, y + keySize / 2);
+        };
+
+        const row1X = cx - keySize / 2;
+        const row1Y = by - 60;
+        drawKey('W', row1X, row1Y);
+
+        const row2Y = row1Y + keySize + gap;
+        drawKey('A', cx - keySize * 1.5 - gap, row2Y);
+        drawKey('S', cx - keySize / 2, row2Y);
+        drawKey('D', cx + keySize * 0.5 + gap, row2Y);
+
+        ctx.fillStyle = '#ccaa55';
+        ctx.font = '11px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText('Use WASD to move', cx, row2Y + keySize + 8);
+
+        ctx.restore();
     }
 
     drawDecorations(ctx) {

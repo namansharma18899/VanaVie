@@ -1,25 +1,13 @@
-import { EnemyIdle, EnemyPatrol, EnemyChase, EnemyAttack, EnemyHurt, EnemyDead } from './enemyStates.js';
-import { EnemyProjectile } from './enemyProjectile.js';
+import { EnemyIdle, EnemyPatrol, EnemyHurt, EnemyDead } from './enemyStates.js';
 
 const EnemyState = Object.freeze({
     IDLE: 0,
     PATROL: 1,
-    CHASE: 2,
-    ATTACK: 3,
-    HURT: 4,
-    DEAD: 5,
+    HURT: 2,
+    DEAD: 3,
 });
 
 export { EnemyState };
-
-let _alertImage = null;
-function getAlertImage() {
-    if (!_alertImage) {
-        _alertImage = new Image();
-        _alertImage.src = 'assets/sprites/Enemy/alert/bolt_bronze.png';
-    }
-    return _alertImage;
-}
 
 export class Enemy {
     constructor(game, config) {
@@ -44,10 +32,6 @@ export class Enemy {
         this.health = config.health || 30;
         this.maxHealth = this.health;
         this.damage = config.damage || 10;
-        this.detectionRange = config.detectionRange || 200;
-        this.attackRange = config.attackRange || 50;
-        this.attackCooldown = 0;
-        this.attackCooldownTime = config.attackCooldownTime || 1000;
 
         this.patrolLeft = config.patrolLeft ?? (this.x - 100);
         this.patrolRight = config.patrolRight ?? (this.x + 100);
@@ -57,27 +41,8 @@ export class Enemy {
         this.hitboxWidth = config.hitboxWidth || 40;
         this.hitboxHeight = config.hitboxHeight || 52;
 
-        this.isRanged = config.isRanged || false;
-        this.projectileRange = config.projectileRange || 250;
-        this.projectiles = [];
-        this.projectileConfig = config.projectileConfig || null;
-        this._projectileImage = null;
-        if (this.projectileConfig?.src) {
-            this._projectileImage = new Image();
-            this._projectileImage.src = this.projectileConfig.src;
-        }
-
-        this.alerted = false;
-        this.alertTimer = 0;
-        this.alertImage = getAlertImage();
-
         this.hitInvincibilityTimer = 0;
         this.hitInvincibilityDuration = 400;
-
-        this.canJump = config.canJump || false;
-        this.jumpForce = config.jumpForce || -10;
-        this.jumpCooldown = 0;
-        this.jumpCooldownTime = 500;
 
         this.image = null;
         this.activeImage = null;
@@ -109,8 +74,6 @@ export class Enemy {
         this.states = [
             new EnemyIdle(this),
             new EnemyPatrol(this),
-            new EnemyChase(this),
-            new EnemyAttack(this),
             new EnemyHurt(this),
             new EnemyDead(this),
         ];
@@ -138,32 +101,6 @@ export class Enemy {
         this.currentState.enter();
     }
 
-    fireProjectile(player) {
-        const playerCX = player.x + player.width / 2;
-        const enemyCX = this.x + this.width / 2;
-        const direction = playerCX > enemyCX ? 1 : -1;
-
-        const spawnX = direction > 0
-            ? this.x + this.width
-            : this.x - (this.projectileConfig?.height || 54);
-        const spawnY = this.y + this.height / 2 - (this.projectileConfig?.width || 9) / 2;
-
-        const proj = new EnemyProjectile(spawnX, spawnY, direction, {
-            ...this.projectileConfig,
-            image: this._projectileImage,
-            damage: this.projectileConfig?.damage || this.damage,
-        });
-        this.projectiles.push(proj);
-    }
-
-    jump() {
-        if (this.onGround && this.jumpCooldown <= 0) {
-            this.vy = this.jumpForce;
-            this.onGround = false;
-            this.jumpCooldown = this.jumpCooldownTime;
-        }
-    }
-
     update(deltaTime, player) {
         if (this.currentState) {
             this.currentState.handleInput(player, deltaTime);
@@ -171,23 +108,7 @@ export class Enemy {
 
         this.vy += this.gravity;
 
-        if (this.attackCooldown > 0) this.attackCooldown -= deltaTime;
         if (this.hitInvincibilityTimer > 0) this.hitInvincibilityTimer -= deltaTime;
-        if (this.jumpCooldown > 0) this.jumpCooldown -= deltaTime;
-        if (this.alertTimer > 0) {
-            this.alertTimer -= deltaTime;
-            if (this.alertTimer <= 0) {
-                this.alerted = false;
-                this.alertTimer = 0;
-            }
-        }
-
-        for (let i = this.projectiles.length - 1; i >= 0; i--) {
-            this.projectiles[i].update(deltaTime);
-            if (this.projectiles[i].markedForDeletion) {
-                this.projectiles.splice(i, 1);
-            }
-        }
 
         this.advanceFrame(deltaTime);
     }
@@ -235,21 +156,6 @@ export class Enemy {
             );
         }
         ctx.restore();
-
-        if (this.alerted && this.alertImage?.complete && this.alertImage.naturalWidth) {
-            const iconW = 19 * s;
-            const iconH = 30 * s;
-            const iconX = screen.x + (dw - iconW) / 2;
-            const iconY = screen.y - iconH - 4 * s;
-            const pulse = 0.8 + 0.2 * Math.sin(Date.now() / 200);
-            ctx.globalAlpha = pulse;
-            ctx.drawImage(this.alertImage, iconX, iconY, iconW, iconH);
-            ctx.globalAlpha = 1.0;
-        }
-
-        for (const proj of this.projectiles) {
-            proj.draw(ctx, camera);
-        }
     }
 
     takeDamage(amount) {
@@ -259,33 +165,10 @@ export class Enemy {
         this.health = Math.max(0, this.health - amount);
         this.hitInvincibilityTimer = this.hitInvincibilityDuration;
 
-        if (!this.alerted) {
-            this.alerted = true;
-            this.alertTimer = 6000;
-        }
-        if (this.game?.enemyManager) {
-            this.game.enemyManager.alertNearby(this);
-        }
-
         if (this.health <= 0) {
             this.setState(EnemyState.DEAD);
         } else {
             this.setState(EnemyState.HURT);
         }
-    }
-
-    distanceTo(target) {
-        const cx = this.x + this.width / 2;
-        const cy = this.y + this.height / 2;
-        const tx = target.x + target.width / 2;
-        const ty = target.y + target.height / 2;
-        return Math.hypot(tx - cx, ty - cy);
-    }
-
-    /** True when the target is roughly on the same ground level. */
-    isOnSameLevel(target) {
-        const eFeet = this.y + this.height;
-        const tFeet = target.y + target.height;
-        return Math.abs(eFeet - tFeet) < this.height * 1.2;
     }
 }
