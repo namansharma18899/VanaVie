@@ -1,10 +1,13 @@
-import { EnemyIdle, EnemyPatrol, EnemyHurt, EnemyDead } from './enemyStates.js';
+import { EnemyIdle, EnemyPatrol, EnemyHurt, EnemyDead, EnemyChase, EnemyAttack } from './enemyStates.js';
+import { Projectile } from '../player_stuff/projectile.js';
 
 const EnemyState = Object.freeze({
     IDLE: 0,
     PATROL: 1,
     HURT: 2,
     DEAD: 3,
+    CHASE: 4,
+    ATTACK: 5,
 });
 
 export { EnemyState };
@@ -44,6 +47,9 @@ export class Enemy {
         this.hitInvincibilityTimer = 0;
         this.hitInvincibilityDuration = 400;
 
+        this.attackCooldown = 0;
+        this.projectiles = [];
+
         this.image = null;
         this.activeImage = null;
         this.animationImages = {};
@@ -76,6 +82,8 @@ export class Enemy {
             new EnemyPatrol(this),
             new EnemyHurt(this),
             new EnemyDead(this),
+            new EnemyChase(this),
+            new EnemyAttack(this),
         ];
         this.currentState = null;
         this.setState(EnemyState.PATROL);
@@ -109,8 +117,25 @@ export class Enemy {
         this.vy += this.gravity;
 
         if (this.hitInvincibilityTimer > 0) this.hitInvincibilityTimer -= deltaTime;
+        if (this.attackCooldown > 0) this.attackCooldown -= deltaTime;
+
+        for (let i = this.projectiles.length - 1; i >= 0; i--) {
+            this.projectiles[i].update(deltaTime);
+            if (this.projectiles[i].markedForDeletion) {
+                this.projectiles.splice(i, 1);
+            }
+        }
 
         this.advanceFrame(deltaTime);
+    }
+
+    fireProjectile() {
+        const cfg = this.config.projectileConfig;
+        if (!cfg) return;
+        const dir = this.facingRight ? 1 : -1;
+        const px = this.facingRight ? this.x + this.width : this.x;
+        const py = this.y + this.height / 2;
+        this.projectiles.push(new Projectile(px, py, dir, cfg));
     }
 
     advanceFrame(deltaTime) {
@@ -156,6 +181,10 @@ export class Enemy {
             );
         }
         ctx.restore();
+
+        for (const projectile of this.projectiles) {
+            projectile.draw(ctx, camera);
+        }
     }
 
     takeDamage(amount) {

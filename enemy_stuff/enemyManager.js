@@ -1,11 +1,12 @@
 import { Enemy, EnemyState } from './enemy.js';
-import { resolveCollisions } from '../game_stuff/collision.js';
+import { resolveCollisions, checkEntityCollision } from '../game_stuff/collision.js';
 
 export class EnemyManager {
     constructor(game) {
         this.game = game;
         this.enemies = [];
         this.enemyConfigs = {};
+        this.contactDamageCooldowns = new WeakMap();
     }
 
     registerEnemyType(typeName, config) {
@@ -56,6 +57,8 @@ export class EnemyManager {
             }
 
             this.checkProjectileHits(enemy, player);
+            this.checkEnemyProjectileHits(enemy, player);
+            this.checkContactDamage(enemy, player, deltaTime);
         }
     }
 
@@ -67,6 +70,28 @@ export class EnemyManager {
                 enemy.takeDamage(player.damage);
                 if (this.game.audio) this.game.audio.play('enemyHurt');
             }
+        }
+    }
+
+    checkEnemyProjectileHits(enemy, player) {
+        for (const projectile of enemy.projectiles) {
+            if (projectile.markedForDeletion) continue;
+            if (projectile.collidesWith(player)) {
+                projectile.markedForDeletion = true;
+                player.takeDamage(enemy.config.projectileConfig?.damage || enemy.damage);
+            }
+        }
+    }
+
+    checkContactDamage(enemy, player, deltaTime) {
+        let cooldown = this.contactDamageCooldowns.get(enemy) || 0;
+        if (cooldown > 0) {
+            this.contactDamageCooldowns.set(enemy, cooldown - deltaTime);
+            return;
+        }
+        if (checkEntityCollision(enemy, player)) {
+            player.takeDamage(enemy.damage);
+            this.contactDamageCooldowns.set(enemy, 800);
         }
     }
 
